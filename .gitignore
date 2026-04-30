@@ -4,8 +4,6 @@ __pycache__/
 *.mp4
 *.mov
 *.avi
-*.m4v
-*.mp3
-*.wav
 *.zip
 .DS_Store
+.streamlit/secrets.toml

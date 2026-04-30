@@ -1,25 +1,24 @@
+
 import os
 import json
 import tempfile
 from pathlib import Path
 
 import streamlit as st
-import numpy as np
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# Fix MoviePy 1.0.3 with modern Pillow.
-# Pillow removed Image.ANTIALIAS; MoviePy still expects it.
+# Pillow compatibility for text overlays
 from PIL import Image, ImageDraw, ImageFont
-if not hasattr(Image, "ANTIALIAS"):
-    Image.ANTIALIAS = Image.Resampling.LANCZOS
+import numpy as np
 
 from moviepy.editor import (
     VideoFileClip,
     AudioFileClip,
     CompositeVideoClip,
-    ImageClip,
     CompositeAudioClip,
+    ImageClip,
+    ColorClip,
 )
 
 load_dotenv()
@@ -33,11 +32,11 @@ st.set_page_config(
 st.title("🎬 AI Short Video Generator")
 st.write("Upload a raw video, describe the goal, and generate a polished short video.")
 
-api_key = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY", None)
+api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key) if api_key else None
 
 if not api_key:
-    st.warning("OPENAI_API_KEY is missing. AI planning is disabled, but manual rendering still works.")
+    st.warning("OPENAI_API_KEY is missing. AI planning will use fallback mode.")
 
 with st.sidebar:
     st.header("Video Settings")
@@ -47,23 +46,29 @@ with st.sidebar:
     add_title_overlay = st.checkbox("Add title overlay", value=True)
     add_captions = st.checkbox("Add captions / felirat", value=True)
     use_background_music = st.checkbox("Use background music", value=False)
+    add_credit_screen = st.checkbox("Add credit screen", value=True)
+    use_crossfade = st.checkbox("Use gentle fade in/out", value=True)
 
 uploaded_video = st.file_uploader("Upload raw video", type=["mp4", "mov", "m4v", "avi"])
+uploaded_logo = st.file_uploader("Optional logo overlay", type=["png", "jpg", "jpeg"])
 
 col1, col2 = st.columns(2)
+
 with col1:
     title = st.text_input("Short video title", placeholder="Example: Volunteers making sandwiches for people in need")
     url = st.text_input("Optional URL", placeholder="LinkedIn / website / campaign link")
+    credit_text = st.text_input("Credit screen text", value="Budapest Bike Maffia ©")
+
 with col2:
     description = st.text_area(
         "Description / instructions for ChatGPT",
-        placeholder="Example: Make this emotional, human, short, with Hungarian captions.",
+        placeholder="Example: Make this emotional, human, short, with Hungarian captions. Focus on volunteers, kindness, and impact.",
         height=120,
     )
 
 caption_text = st.text_area(
     "Caption / felirat text",
-    placeholder="Paste caption lines here. Each line becomes one subtitle block.",
+    placeholder="Paste transcript or short caption lines here.",
     height=140,
 )
 
@@ -72,163 +77,171 @@ if use_background_music:
     background_music = st.file_uploader("Upload background music", type=["mp3", "wav", "m4a"])
 
 
-def safe_json_loads(raw_text):
-    """Parse JSON even if the model wraps it in markdown or extra text."""
-    if not raw_text:
-        raise ValueError("OpenAI returned an empty response")
-
-    raw_text = raw_text.strip()
-
-    if raw_text.startswith("```"):
-        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
-
-    try:
-        return json.loads(raw_text)
-    except json.JSONDecodeError:
-        start = raw_text.find("{")
-        end = raw_text.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            return json.loads(raw_text[start:end + 1])
-        raise
-
-
-def clean_edit_plan(plan, fallback):
-    """Make sure the AI plan always has safe values for rendering."""
-    cleaned = fallback.copy()
-    if isinstance(plan, dict):
-        cleaned.update({k: v for k, v in plan.items() if v is not None})
-
-    try:
-        cleaned["recommended_start"] = max(0, float(cleaned.get("recommended_start", 0)))
-    except Exception:
-        cleaned["recommended_start"] = 0
-
-    try:
-        cleaned["recommended_end"] = float(cleaned.get("recommended_end", target_length))
-    except Exception:
-        cleaned["recommended_end"] = target_length
-
-    if cleaned["recommended_end"] <= cleaned["recommended_start"]:
-        cleaned["recommended_start"] = 0
-        cleaned["recommended_end"] = target_length
-
-    lines = cleaned.get("caption_lines", [])
-    if isinstance(lines, str):
-        lines = [line.strip() for line in lines.splitlines() if line.strip()]
-    if not isinstance(lines, list):
-        lines = fallback.get("caption_lines", [])
-    cleaned["caption_lines"] = [str(line).strip() for line in lines if str(line).strip()][:8]
-
-    cleaned["hook"] = str(cleaned.get("hook") or fallback.get("hook") or "Short video")[:80]
-    cleaned["music_mood"] = str(cleaned.get("music_mood") or "soft inspirational")
-    cleaned["editing_notes"] = str(cleaned.get("editing_notes") or "AI edit plan generated.")
-    return cleaned
-
-
-def get_ai_edit_plan(title, url, description, target_length, target_format, caption_text):
-    fallback_lines = [line.strip() for line in caption_text.splitlines() if line.strip()]
-    fallback = {
+def fallback_plan():
+    lines = [line.strip() for line in caption_text.splitlines() if line.strip()]
+    return {
         "hook": title or "Short video",
         "recommended_start": 0,
         "recommended_end": target_length,
-        "caption_lines": fallback_lines,
-        "music_mood": "soft inspirational",
-        "editing_notes": "Manual fallback plan used.",
+        "caption_lines": lines if lines else [
+            "Önkéntesek készítenek szendvicseket.",
+            "Egy kis segítség.",
+            "Valódi emberi hatás.",
+        ],
+        "logo_overlay_seconds": 2,
+        "credit_screen_text": credit_text or "Budapest Bike Maffia ©",
+        "music_mood": "gentle emotional background music",
+        "editing_notes": "Fallback used. Actionable fields still control render where supported.",
     }
 
+
+def get_ai_edit_plan():
     if not client:
-        return fallback
+        return fallback_plan()
 
-    system_message = "You are a short-form video editor. Return only valid JSON. No markdown."
-    user_message = f"""
-Create a practical edit plan for a short social video.
+    prompt = f"""
+You are a short-form video editor.
 
-Required JSON keys:
-- hook: short title overlay
-- recommended_start: number, seconds
-- recommended_end: number, seconds
-- caption_lines: array of short caption/felirat lines
-- music_mood: short description
-- editing_notes: brief editing direction
+Return ONLY valid JSON. Do not use markdown.
+
+The renderer can execute ONLY these fields:
+- hook
+- recommended_start
+- recommended_end
+- caption_lines
+- logo_overlay_seconds
+- credit_screen_text
+- music_mood
+- editing_notes
+
+Important:
+Do not place critical actions only inside editing_notes.
+Put actionable instructions into the fields above.
+
+Return this exact JSON structure:
+{{
+  "hook": "short title overlay",
+  "recommended_start": 0,
+  "recommended_end": 30,
+  "caption_lines": ["caption line 1", "caption line 2"],
+  "logo_overlay_seconds": 2,
+  "credit_screen_text": "Budapest Bike Maffia ©",
+  "music_mood": "gentle emotional",
+  "editing_notes": "Short optional notes only"
+}}
 
 Video title: {title}
 URL: {url}
 Description: {description}
-Target length: {target_length} seconds
+Target length: {target_length}
 Target format: {target_format}
-Available caption/transcript text:
+Caption/transcript text:
 {caption_text}
 """
 
     try:
-        # JSON mode prevents markdown/text responses that break json.loads().
-        response = client.chat.completions.create(
+        response = client.responses.create(
             model="gpt-4.1-mini",
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=0.4,
+            input=prompt,
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "short_video_edit_plan",
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "hook": {"type": "string"},
+                            "recommended_start": {"type": "number"},
+                            "recommended_end": {"type": "number"},
+                            "caption_lines": {
+                                "type": "array",
+                                "items": {"type": "string"}
+                            },
+                            "logo_overlay_seconds": {"type": "number"},
+                            "credit_screen_text": {"type": "string"},
+                            "music_mood": {"type": "string"},
+                            "editing_notes": {"type": "string"}
+                        },
+                        "required": [
+                            "hook",
+                            "recommended_start",
+                            "recommended_end",
+                            "caption_lines",
+                            "logo_overlay_seconds",
+                            "credit_screen_text",
+                            "music_mood",
+                            "editing_notes"
+                        ]
+                    }
+                }
+            }
         )
-        raw_text = response.choices[0].message.content or ""
-        plan = safe_json_loads(raw_text)
-        return clean_edit_plan(plan, fallback)
+        return json.loads(response.output_text)
     except Exception as e:
-        fallback["editing_notes"] = f"AI planning failed, fallback used. Error: {e}"
-        return fallback
+        plan = fallback_plan()
+        plan["editing_notes"] = f"AI planning failed, fallback used. Error: {e}"
+        return plan
 
 
-def target_size_for_format(fmt):
-    if fmt == "9:16 vertical":
+def get_target_size(target_format):
+    if target_format == "9:16 vertical":
         return 1080, 1920
-    if fmt == "1:1 square":
+    if target_format == "1:1 square":
         return 1080, 1080
     return 1920, 1080
 
 
-def resize_for_format(video, fmt):
-    target_w, target_h = target_size_for_format(fmt)
+def resize_for_format(video, target_format):
+    target_w, target_h = get_target_size(target_format)
 
-    # Resize by aspect ratio, then center crop.
-    video_ratio = video.w / video.h
-    target_ratio = target_w / target_h
+    # Resize to fill, then crop center
+    scale = max(target_w / video.w, target_h / video.h)
+    video = video.resize(scale)
 
-    if video_ratio > target_ratio:
-        video = video.resize(height=target_h)
-    else:
-        video = video.resize(width=target_w)
+    x_center = video.w / 2
+    y_center = video.h / 2
 
     return video.crop(
-        x_center=video.w / 2,
-        y_center=video.h / 2,
+        x_center=x_center,
+        y_center=y_center,
         width=target_w,
         height=target_h,
     )
 
 
-def load_font(size):
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+def load_font(size, bold=False):
+    font_candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf" if bold else "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "arial.ttf",
     ]
-    for path in candidates:
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
+    for font_path in font_candidates:
+        try:
+            return ImageFont.truetype(font_path, size)
+        except Exception:
+            pass
     return ImageFont.load_default()
 
 
-def wrap_text(text, font, max_width):
+def make_text_overlay(text, duration, size, position="bottom", font_size=58):
+    width, height = size
+    overlay_h = 260 if position == "bottom" else 220
+
+    img = Image.new("RGBA", (width, overlay_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    font = load_font(font_size, bold=True)
+
+    max_text_width = int(width * 0.82)
     words = text.split()
     lines = []
     current = ""
-    dummy = Image.new("RGB", (10, 10))
-    draw = ImageDraw.Draw(dummy)
 
     for word in words:
         test = f"{current} {word}".strip()
         bbox = draw.textbbox((0, 0), test, font=font)
-        if bbox[2] - bbox[0] <= max_width:
+        if bbox[2] - bbox[0] <= max_text_width:
             current = test
         else:
             if current:
@@ -236,62 +249,54 @@ def wrap_text(text, font, max_width):
             current = word
     if current:
         lines.append(current)
-    return lines
 
+    line_height = font_size + 12
+    total_text_h = len(lines) * line_height
+    y = (overlay_h - total_text_h) // 2
 
-def make_text_overlay(text, video_w, video_h, duration, position="bottom", font_size=64):
-    img = Image.new("RGBA", (video_w, video_h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    font = load_font(font_size)
-
-    max_width = int(video_w * 0.86)
-    lines = wrap_text(text, font, max_width)
-    line_heights = []
-    total_h = 0
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
-        h = bbox[3] - bbox[1]
-        line_heights.append(h)
-        total_h += h + 12
-    total_h = max(0, total_h - 12)
-
-    if position == "top":
-        y = int(video_h * 0.08)
-    else:
-        y = int(video_h * 0.78) - total_h // 2
-
-    padding_x = 28
-    padding_y = 20
-    bg_top = max(0, y - padding_y)
-    bg_bottom = min(video_h, y + total_h + padding_y)
-    draw.rounded_rectangle(
-        [int(video_w * 0.05), bg_top, int(video_w * 0.95), bg_bottom],
-        radius=24,
-        fill=(0, 0, 0, 145),
-    )
-
-    for line, h in zip(lines, line_heights):
-        bbox = draw.textbbox((0, 0), line, font=font)
         text_w = bbox[2] - bbox[0]
-        x = (video_w - text_w) // 2
+        x = (width - text_w) // 2
+
+        # shadow / stroke effect
+        for dx, dy in [(-3, -3), (3, -3), (-3, 3), (3, 3), (0, 3)]:
+            draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 210))
         draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
-        y += h + 12
+        y += line_height
 
-    return ImageClip(np.array(img)).set_duration(duration)
+    clip = ImageClip(np.array(img)).set_duration(duration)
+    if position == "top":
+        return clip.set_position(("center", 40))
+    return clip.set_position(("center", height - overlay_h - 80))
 
 
-def render_video(video_file, music_file, plan):
+def make_credit_screen(text, duration, size):
+    width, height = size
+    bg = ColorClip(size=(width, height), color=(12, 12, 12)).set_duration(duration)
+    txt = make_text_overlay(text, duration, size, position="bottom", font_size=64)
+    txt = txt.set_position(("center", "center"))
+    return CompositeVideoClip([bg, txt], size=size).set_duration(duration)
+
+
+def save_uploaded_file(uploaded_file, path):
+    with open(path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+
+def render_video(uploaded_video_file, music_file, logo_file, plan):
     temp_dir = tempfile.mkdtemp()
-    input_path = Path(temp_dir) / "input_video.mp4"
-    output_path = Path(temp_dir) / "final_short_video.mp4"
+    temp_dir = Path(temp_dir)
 
-    with open(input_path, "wb") as f:
-        f.write(video_file.getbuffer())
+    input_path = temp_dir / "input_video.mp4"
+    output_path = temp_dir / "final_short_video.mp4"
+    save_uploaded_file(uploaded_video_file, input_path)
 
     video = VideoFileClip(str(input_path))
 
     start = max(0, float(plan.get("recommended_start", 0)))
     end = min(video.duration, float(plan.get("recommended_end", target_length)))
+
     if end <= start:
         start = 0
         end = min(video.duration, target_length)
@@ -299,48 +304,83 @@ def render_video(video_file, music_file, plan):
     video = video.subclip(start, end)
     video = resize_for_format(video, target_format)
 
-    overlays = [video]
+    target_size = get_target_size(target_format)
+    clips = [video]
+
+    if use_crossfade:
+        video = video.fadein(0.25).fadeout(0.35)
+        clips = [video]
+
+    if uploaded_logo is not None:
+        logo_path = temp_dir / "logo.png"
+        save_uploaded_file(uploaded_logo, logo_path)
+        logo_duration = min(float(plan.get("logo_overlay_seconds", 2)), video.duration)
+        logo = (
+            ImageClip(str(logo_path))
+            .resize(width=220)
+            .set_duration(logo_duration)
+            .set_position(("center", 80))
+            .fadein(0.15)
+            .fadeout(0.2)
+        )
+        clips.append(logo)
 
     if add_title_overlay:
-        hook = plan.get("hook", title or "Short video")
-        title_clip = make_text_overlay(
-            hook,
-            video.w,
-            video.h,
-            duration=min(4, video.duration),
-            position="top",
-            font_size=62,
+        hook = plan.get("hook") or title or "Short video"
+        clips.append(
+            make_text_overlay(
+                hook,
+                min(4, video.duration),
+                target_size,
+                position="top",
+                font_size=62,
+            )
         )
-        overlays.append(title_clip)
 
     if add_captions:
-        lines = plan.get("caption_lines", [])[:8]
-        if lines:
-            segment_duration = video.duration / len(lines)
-            for i, line in enumerate(lines):
-                clip = make_text_overlay(
-                    line,
-                    video.w,
-                    video.h,
-                    duration=segment_duration,
-                    position="bottom",
-                    font_size=56,
-                ).set_start(i * segment_duration)
-                overlays.append(clip)
+        caption_lines = plan.get("caption_lines", [])
+        caption_lines = [line for line in caption_lines if line.strip()]
+        caption_lines = caption_lines[:8]
 
-    final = CompositeVideoClip(overlays)
+        if caption_lines:
+            segment_duration = max(1.2, video.duration / len(caption_lines))
+            for i, line in enumerate(caption_lines):
+                start_time = i * segment_duration
+                if start_time >= video.duration:
+                    break
+                duration = min(segment_duration, video.duration - start_time)
+                clips.append(
+                    make_text_overlay(
+                        line,
+                        duration,
+                        target_size,
+                        position="bottom",
+                        font_size=56,
+                    ).set_start(start_time)
+                )
+
+    final = CompositeVideoClip(clips, size=target_size).set_duration(video.duration)
+
+    if add_credit_screen:
+        credit = make_credit_screen(
+            plan.get("credit_screen_text") or credit_text or "Budapest Bike Maffia ©",
+            2.5,
+            target_size,
+        )
+        final = CompositeVideoClip([final], size=target_size)
+        final = final.fx(lambda c: c)  # keep compatibility
+        final = concatenate_safe([final, credit], target_size)
 
     audio_tracks = []
     if not mute_original and video.audio:
-        audio_tracks.append(video.audio.volumex(0.8))
+        audio_tracks.append(video.audio.volumex(0.75))
 
     if music_file is not None:
-        music_path = Path(temp_dir) / "background_music"
-        with open(music_path, "wb") as f:
-            f.write(music_file.getbuffer())
-        music = AudioFileClip(str(music_path))
-        music = music.subclip(0, min(video.duration, music.duration)).volumex(0.18)
-        audio_tracks.append(music)
+        music_path = temp_dir / "background_music.mp3"
+        save_uploaded_file(music_file, music_path)
+        music_clip = AudioFileClip(str(music_path))
+        music_clip = music_clip.subclip(0, min(final.duration, music_clip.duration)).volumex(0.18)
+        audio_tracks.append(music_clip)
 
     if audio_tracks:
         final = final.set_audio(CompositeAudioClip(audio_tracks))
@@ -356,10 +396,18 @@ def render_video(video_file, music_file, plan):
         threads=2,
     )
 
-    video.close()
-    final.close()
-
     return output_path
+
+
+def concatenate_safe(clips, target_size):
+    # local import avoids startup issues
+    from moviepy.editor import concatenate_videoclips
+    fixed = []
+    for c in clips:
+        if c.size != list(target_size) and c.size != target_size:
+            c = c.resize(target_size)
+        fixed.append(c)
+    return concatenate_videoclips(fixed, method="compose")
 
 
 if uploaded_video:
@@ -367,19 +415,26 @@ if uploaded_video:
 
     if st.button("✨ Generate AI edit plan"):
         with st.spinner("Creating edit plan..."):
-            st.session_state["edit_plan"] = get_ai_edit_plan(
-                title, url, description, target_length, target_format, caption_text
-            )
+            st.session_state["edit_plan"] = get_ai_edit_plan()
 
     if "edit_plan" in st.session_state:
         st.subheader("AI Edit Plan")
         st.json(st.session_state["edit_plan"])
 
+        st.info("Note: only structured fields are rendered. `editing_notes` is advice, not executable instructions.")
+
         if st.button("🎞️ Generate Short Video"):
             with st.spinner("Rendering video..."):
-                output_path = render_video(uploaded_video, background_music, st.session_state["edit_plan"])
+                output_path = render_video(
+                    uploaded_video,
+                    background_music,
+                    uploaded_logo,
+                    st.session_state["edit_plan"],
+                )
+
                 st.success("Short video generated.")
                 st.video(str(output_path))
+
                 with open(output_path, "rb") as f:
                     st.download_button(
                         "Download final short video",

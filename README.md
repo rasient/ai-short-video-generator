@@ -1,35 +1,44 @@
 # AI Short Video Generator
 
-AI-powered Streamlit MVP for turning uploaded raw videos into short-form content.
+A Streamlit MVP that turns raw videos into short-form social content.
 
 ## What it does
 
 - Upload raw video
-- Add title, URL, and description
+- Add title / URL / description
 - Generate AI edit plan
 - Trim video
 - Add title overlay
-- Add captions / felirat
-- Optionally mute original audio
-- Optionally add background music
-- Export MP4 short video
+- Add Hungarian captions / felirat
+- Optional mute
+- Optional background music
+- Optional logo overlay
+- Optional credit screen
+- Export MP4
 
-## Tech stack
+## Important note
 
-- Streamlit
-- OpenAI API
-- MoviePy
-- Pillow
+The renderer only executes structured fields from the AI plan, such as:
+
+- `hook`
+- `recommended_start`
+- `recommended_end`
+- `caption_lines`
+- `logo_overlay_seconds`
+- `credit_screen_text`
+
+The `editing_notes` field is shown as guidance only. It is not automatically executed unless the feature is implemented in the renderer.
 
 ## Recommended future features
 
 - Whisper auto-transcription
-- AI subtitle rewriting
-- Scene detection
-- Auto hook generation
-- TikTok / Reels / Shorts templates
-- Smart background music matching
-- Brand presets
-- Batch video processing
-- Direct publishing to LinkedIn, TikTok, YouTube Shorts
-- Analytics and performance scoring
+- Automatic subtitle timing by speech
+- Real scene detection
+- Automatic jump cuts
+- Beat-synced music cuts
+- Logo placement presets
+- Brand template system
+- Multi-language subtitles
+- LinkedIn / TikTok / YouTube Shorts export presets
+- Batch processing
+- Cloud rendering queue
