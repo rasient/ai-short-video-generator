@@ -2,6 +2,7 @@
 import os
 import json
 import tempfile
+import subprocess
 from pathlib import Path
 
 import streamlit as st
@@ -200,46 +201,37 @@ def get_target_size(target_format):
     return 1920, 1080
 
 
-def resize_for_format(video, target_format):
+def ffmpeg_resize_video(input_path, output_path, target_format, resize_mode):
     """
-    Resize without stretching.
-
-    Crop to fill:
-    - Preserves aspect ratio
-    - Fills the whole frame
-    - Crops edges if needed
-
-    Fit with padding:
-    - Preserves aspect ratio
-    - Shows the full original video
-    - Adds black padding where needed
+    Resize with FFmpeg instead of MoviePy, avoiding Pillow/Image.ANTIALIAS crashes.
     """
     target_w, target_h = get_target_size(target_format)
 
     if resize_mode.startswith("Crop to fill"):
-        scale = max(target_w / video.w, target_h / video.h)
-        resized = video.resize(scale)
-
-        return resized.crop(
-            x_center=resized.w / 2,
-            y_center=resized.h / 2,
-            width=target_w,
-            height=target_h,
+        vf = (
+            f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,"
+            f"crop={target_w}:{target_h}"
+        )
+    else:
+        vf = (
+            f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease,"
+            f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:black"
         )
 
-    # Fit with padding - never stretch
-    scale = min(target_w / video.w, target_h / video.h)
-    resized = video.resize(scale)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", str(input_path),
+        "-vf", vf,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+        str(output_path),
+    ]
 
-    background = ColorClip(
-        size=(target_w, target_h),
-        color=(0, 0, 0),
-    ).set_duration(resized.duration)
-
-    return CompositeVideoClip(
-        [background, resized.set_position(("center", "center"))],
-        size=(target_w, target_h),
-    ).set_duration(resized.duration)
+    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
 def load_font(size, bold=False):
@@ -324,17 +316,33 @@ def render_video(uploaded_video_file, music_file, logo_file, plan):
     output_path = temp_dir / "final_short_video.mp4"
     save_uploaded_file(uploaded_video_file, input_path)
 
-    video = VideoFileClip(str(input_path))
+    original_video = VideoFileClip(str(input_path))
 
     start = max(0, float(plan.get("recommended_start", 0)))
-    end = min(video.duration, float(plan.get("recommended_end", target_length)))
+    end = min(original_video.duration, float(plan.get("recommended_end", target_length)))
 
     if end <= start:
         start = 0
-        end = min(video.duration, target_length)
+        end = min(original_video.duration, target_length)
 
-    video = video.subclip(start, end)
-    video = resize_for_format(video, target_format)
+    trimmed_path = temp_dir / "trimmed_video.mp4"
+    resized_path = temp_dir / "resized_video.mp4"
+
+    # First trim with MoviePy, then resize with FFmpeg to avoid MoviePy/Pillow resize bug.
+    trimmed = original_video.subclip(start, end)
+    trimmed.write_videofile(
+        str(trimmed_path),
+        codec="libx264",
+        audio_codec="aac",
+        fps=30,
+        preset="ultrafast",
+        threads=2,
+        verbose=False,
+        logger=None,
+    )
+
+    ffmpeg_resize_video(trimmed_path, resized_path, target_format, resize_mode)
+    video = VideoFileClip(str(resized_path))
 
     target_size = get_target_size(target_format)
     clips = [video]

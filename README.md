@@ -25,6 +25,8 @@ The app includes two resize modes:
 
 Use **Fit with padding** if your video looks stretched.
 
+This version uses FFmpeg for resizing instead of MoviePy resize, avoiding the Pillow `Image.ANTIALIAS` compatibility crash on Streamlit Cloud.
+
 ## Important note
 
 The renderer only executes structured fields from the AI plan, such as:
