@@ -2,7 +2,7 @@
 
 # 
 
-# A Streamlit app that turns raw videos into short-form content using \*\*AI + smart scene detection\*\*.
+# Turn raw videos into short-form content using \*\*AI + smart scene detection\*\*.
 
 # 
 
@@ -10,33 +10,29 @@
 
 # 
 
-# \# 🚀 What this app does
+# \# 🚀 Features
 
 # 
 
-# \* Upload a raw video
+# \* Upload raw video
 
-# \* Generate an AI edit plan (ChatGPT)
+# \* Generate AI edit plan (OpenAI)
 
-# \* Automatically detect important scenes
+# \* ✂️ Smart scene cutting (no manual trimming needed)
 
-# \* Cut the video into a short (no manual editing needed)
+# \* 📝 Captions / felirat
 
-# \* Add:
+# \* 🏷️ Title overlay
 
-# 
+# \* 🖼️ Optional logo overlay
 
-# &#x20; \* Title overlay
+# \* 🎵 Optional background music
 
-# &#x20; \* Captions / felirat
+# \* 🔇 Optional mute
 
-# &#x20; \* Optional logo
+# \* 🎬 Premium LinkedIn-style credit screen
 
-# &#x20; \* Optional background music
-
-# &#x20; \* Premium credit screen
-
-# \* Export a ready-to-post short video
+# \* 📤 Export ready-to-post MP4
 
 # 
 
@@ -44,31 +40,33 @@
 
 # 
 
-# \# 🧠 Core idea
+# \# 🧠 How it works
 
 # 
 
-# Most tools edit video.
+# \## 1. AI Edit Plan
 
 # 
 
-# This tool decides:
+# ChatGPT generates:
 
 # 
 
-# > \*\*Which parts of the video actually matter\*\*
+# \* hook (title)
+
+# \* caption lines
+
+# \* credit text
+
+# \* basic editing hints
 
 # 
 
-# \---
+# \## 2. Smart Scene Cutting
 
 # 
 
-# \# ✂️ Smart Scene Cutting
-
-# 
-
-# The app uses lightweight scene detection:
+# The app:
 
 # 
 
@@ -76,15 +74,17 @@
 
 # 2\. Detects visual changes
 
-# 3\. Splits into segments
+# 3\. Splits video into segments
 
-# 4\. Selects best scenes
+# 4\. Scores segments
 
-# 5\. Combines them into a short
+# 5\. Selects best scenes
+
+# 6\. Combines them into a short
 
 # 
 
-# No manual trimming needed.
+# 👉 No manual cutting required.
 
 # 
 
@@ -96,7 +96,7 @@
 
 # 
 
-# The video ends with a clean LinkedIn-style credit:
+# Clean, centered end-card:
 
 # 
 
@@ -116,21 +116,27 @@
 
 # Alexander Berg
 
+# 
+
+# SHORT VIDEO SYSTEM
+
 # ```
 
 # 
 
-# Features:
+# Includes:
 
 # 
 
-# \* Centered layout
+# \* dark gradient background
 
-# \* Clean typography
+# \* centered typography
 
-# \* Dark premium background
+# \* accent divider
 
-# \* Fade in / fade out
+# \* soft border
+
+# \* fade in / fade out
 
 # 
 
@@ -146,15 +152,21 @@
 
 # Output format: Same as original - no resize
 
+# Resize mode: Fit with padding - never stretch
+
+# 
+
 # Target length: 30 sec
 
 # 
 
 # Smart scene cutting: ON
 
-# Scenes: 4
+# Maximum scenes: 4
 
-# Sensitivity: 32
+# Minimum scene length: 2.0 sec
+
+# Scene sensitivity: 32
 
 # 
 
@@ -212,7 +224,7 @@
 
 # 
 
-# ```env
+# ```
 
 # OPENAI\_API\_KEY=your\_api\_key\_here
 
@@ -250,17 +262,27 @@
 
 # 
 
-# \* The AI generates a plan, but:
+# \* AI plan:
 
 # 
 
-# &#x20; \* only structured fields are executed
+# &#x20; \* Only structured fields are executed
 
 # &#x20; \* `editing\_notes` is informational
 
+# 
+
 # \* Smart cutting works even without AI
 
-# \* “Same as original” avoids video stretching issues
+# 
+
+# \* “Same as original - no resize” prevents:
+
+# 
+
+# &#x20; \* stretching
+
+# &#x20; \* aspect ratio issues
 
 # 
 
@@ -268,7 +290,7 @@
 
 # 
 
-# \# 🔮 Recommended Future Features
+# \# 🔮 Future Improvements
 
 # 
 
@@ -284,9 +306,9 @@
 
 # \* 🎨 Brand templates
 
-# \* 📊 Analytics (views, retention)
-
 # \* ☁️ Cloud rendering queue
+
+# \* 📊 Performance analytics
 
 # 
 
@@ -320,7 +342,7 @@
 
 # 
 
-# > \*\*AI-powered content systems that understand what matters\*\*
+# > \*\*AI systems that understand what content matters\*\*
 
 
 
