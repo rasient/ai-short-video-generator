@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
+import numpy as np
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -218,7 +219,7 @@ def make_text_overlay(text, video_w, video_h, duration, position="bottom", font_
         draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
         y += h + 12
 
-    return ImageClip(img).set_duration(duration)
+    return ImageClip(np.array(img)).set_duration(duration)
 
 
 def render_video(video_file, music_file, plan):
