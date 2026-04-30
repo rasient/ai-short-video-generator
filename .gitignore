@@ -7,6 +7,5 @@ __pycache__/
 *.m4v
 *.mp3
 *.wav
-*.m4a
-.venv/
-venv/
+*.zip
+.DS_Store

@@ -1,7 +1,7 @@
-streamlit==1.40.2
+streamlit>=1.40.0
 openai>=1.60.0
-python-dotenv==1.0.1
+python-dotenv>=1.0.1
 moviepy==1.0.3
-imageio-ffmpeg==0.5.1
-pillow==9.5.0
-numpy<2
+imageio-ffmpeg>=0.5.1
+Pillow>=10.0.0
+numpy>=1.26.0
