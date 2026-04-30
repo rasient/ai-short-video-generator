@@ -72,6 +72,59 @@ if use_background_music:
     background_music = st.file_uploader("Upload background music", type=["mp3", "wav", "m4a"])
 
 
+def safe_json_loads(raw_text):
+    """Parse JSON even if the model wraps it in markdown or extra text."""
+    if not raw_text:
+        raise ValueError("OpenAI returned an empty response")
+
+    raw_text = raw_text.strip()
+
+    if raw_text.startswith("```"):
+        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+    try:
+        return json.loads(raw_text)
+    except json.JSONDecodeError:
+        start = raw_text.find("{")
+        end = raw_text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(raw_text[start:end + 1])
+        raise
+
+
+def clean_edit_plan(plan, fallback):
+    """Make sure the AI plan always has safe values for rendering."""
+    cleaned = fallback.copy()
+    if isinstance(plan, dict):
+        cleaned.update({k: v for k, v in plan.items() if v is not None})
+
+    try:
+        cleaned["recommended_start"] = max(0, float(cleaned.get("recommended_start", 0)))
+    except Exception:
+        cleaned["recommended_start"] = 0
+
+    try:
+        cleaned["recommended_end"] = float(cleaned.get("recommended_end", target_length))
+    except Exception:
+        cleaned["recommended_end"] = target_length
+
+    if cleaned["recommended_end"] <= cleaned["recommended_start"]:
+        cleaned["recommended_start"] = 0
+        cleaned["recommended_end"] = target_length
+
+    lines = cleaned.get("caption_lines", [])
+    if isinstance(lines, str):
+        lines = [line.strip() for line in lines.splitlines() if line.strip()]
+    if not isinstance(lines, list):
+        lines = fallback.get("caption_lines", [])
+    cleaned["caption_lines"] = [str(line).strip() for line in lines if str(line).strip()][:8]
+
+    cleaned["hook"] = str(cleaned.get("hook") or fallback.get("hook") or "Short video")[:80]
+    cleaned["music_mood"] = str(cleaned.get("music_mood") or "soft inspirational")
+    cleaned["editing_notes"] = str(cleaned.get("editing_notes") or "AI edit plan generated.")
+    return cleaned
+
+
 def get_ai_edit_plan(title, url, description, target_length, target_format, caption_text):
     fallback_lines = [line.strip() for line in caption_text.splitlines() if line.strip()]
     fallback = {
@@ -86,19 +139,17 @@ def get_ai_edit_plan(title, url, description, target_length, target_format, capt
     if not client:
         return fallback
 
-    prompt = f"""
-You are a short-form video editor.
+    system_message = "You are a short-form video editor. Return only valid JSON. No markdown."
+    user_message = f"""
 Create a practical edit plan for a short social video.
 
-Return ONLY valid JSON with this structure:
-{{
-  "hook": "short title overlay",
-  "recommended_start": 0,
-  "recommended_end": 30,
-  "caption_lines": ["caption line 1", "caption line 2"],
-  "music_mood": "background music mood",
-  "editing_notes": "brief editing direction"
-}}
+Required JSON keys:
+- hook: short title overlay
+- recommended_start: number, seconds
+- recommended_end: number, seconds
+- caption_lines: array of short caption/felirat lines
+- music_mood: short description
+- editing_notes: brief editing direction
 
 Video title: {title}
 URL: {url}
@@ -110,12 +161,19 @@ Available caption/transcript text:
 """
 
     try:
-        response = client.responses.create(
+        # JSON mode prevents markdown/text responses that break json.loads().
+        response = client.chat.completions.create(
             model="gpt-4.1-mini",
-            input=prompt,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.4,
         )
-        raw_text = response.output_text.strip()
-        return json.loads(raw_text)
+        raw_text = response.choices[0].message.content or ""
+        plan = safe_json_loads(raw_text)
+        return clean_edit_plan(plan, fallback)
     except Exception as e:
         fallback["editing_notes"] = f"AI planning failed, fallback used. Error: {e}"
         return fallback
