@@ -42,7 +42,7 @@ if not api_key:
 
 with st.sidebar:
     st.header("Video Settings")
-    target_format = st.selectbox("Output format", ["9:16 vertical", "1:1 square", "16:9 horizontal"])
+    target_format = st.selectbox("Output format", ["Same as original - no resize", "9:16 vertical", "1:1 square", "16:9 horizontal"])
     target_length = st.slider("Target length in seconds", 10, 90, 30)
     mute_original = st.checkbox("Mute original audio", value=False)
     add_title_overlay = st.checkbox("Add title overlay", value=True)
@@ -194,7 +194,11 @@ Caption/transcript text:
         return plan
 
 
-def get_target_size(target_format):
+def get_target_size(target_format, original_size=None):
+    if target_format == "Same as original - no resize":
+        if original_size is None:
+            return 1080, 1920
+        return int(original_size[0]), int(original_size[1])
     if target_format == "9:16 vertical":
         return 1080, 1920
     if target_format == "1:1 square":
@@ -206,18 +210,21 @@ def ffmpeg_resize_video(input_path, output_path, target_format, resize_mode):
     """
     Resize with FFmpeg instead of MoviePy, avoiding Pillow/Image.ANTIALIAS crashes.
     """
-    target_w, target_h = get_target_size(target_format)
-
-    if resize_mode.startswith("Crop to fill"):
-        vf = (
-            f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,"
-            f"crop={target_w}:{target_h}"
-        )
+    if target_format == "Same as original - no resize":
+        vf = "setsar=1"
     else:
-        vf = (
-            f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease,"
-            f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:black"
-        )
+        target_w, target_h = get_target_size(target_format)
+
+        if resize_mode.startswith("Crop to fill"):
+            vf = (
+                f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,"
+                f"crop={target_w}:{target_h},setsar=1"
+            )
+        else:
+            vf = (
+                f"scale={target_w}:{target_h}:force_original_aspect_ratio=decrease,"
+                f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
+            )
 
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
 
@@ -371,7 +378,7 @@ def render_video(uploaded_video_file, music_file, logo_file, plan):
     ffmpeg_resize_video(trimmed_path, resized_path, target_format, resize_mode)
     video = VideoFileClip(str(resized_path))
 
-    target_size = get_target_size(target_format)
+    target_size = (int(video.w), int(video.h))
     clips = [video]
 
     if use_crossfade:
@@ -459,6 +466,7 @@ def render_video(uploaded_video_file, music_file, logo_file, plan):
         fps=30,
         preset="ultrafast",
         threads=2,
+        ffmpeg_params=["-vf", "setsar=1"],
     )
 
     return output_path

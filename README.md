@@ -18,7 +18,9 @@ A Streamlit MVP that turns raw videos into short-form social content.
 
 ## Resize behavior
 
-The app includes two resize modes:
+The app includes a safest output option plus two resize modes:
+
+- **Same as original - no resize**: safest option if your generated video looks distorted. It keeps the original video dimensions.
 
 - **Fit with padding - never stretch**: safest option, keeps the whole video visible and adds black padding.
 - **Crop to fill - best for Shorts/Reels**: fills the full vertical frame, preserves aspect ratio, but crops edges.
@@ -63,3 +65,8 @@ This version uses the FFmpeg binary bundled by `imageio-ffmpeg`, so it does not 
 ## Compatibility update
 
 Logo resizing is also handled with Pillow instead of MoviePy, avoiding the same `Image.ANTIALIAS` issue.
+
+
+## v10 no-stretch update
+
+Added `Same as original - no resize` and `setsar=1` in FFmpeg export to prevent pixel-aspect-ratio distortion.
