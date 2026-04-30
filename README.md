@@ -1,72 +1,326 @@
-# AI Short Video Generator
+# \# 🎬 AI Short Video Generator
 
-A Streamlit MVP that turns raw videos into short-form social content.
+# 
 
-## What it does
+# A Streamlit app that turns raw videos into short-form content using \*\*AI + smart scene detection\*\*.
 
-- Upload raw video
-- Add title / URL / description
-- Generate AI edit plan
-- Trim video
-- Add title overlay
-- Add Hungarian captions / felirat
-- Optional mute
-- Optional background music
-- Optional logo overlay
-- Optional credit screen
-- Export MP4
+# 
 
-## Resize behavior
+# \---
 
-The app includes a safest output option plus two resize modes:
+# 
 
-- **Same as original - no resize**: safest option if your generated video looks distorted. It keeps the original video dimensions.
+# \# 🚀 What this app does
 
-- **Fit with padding - never stretch**: safest option, keeps the whole video visible and adds black padding.
-- **Crop to fill - best for Shorts/Reels**: fills the full vertical frame, preserves aspect ratio, but crops edges.
+# 
 
-Use **Fit with padding** if your video looks stretched.
+# \* Upload a raw video
 
-This version uses FFmpeg for resizing instead of MoviePy resize, avoiding the Pillow `Image.ANTIALIAS` compatibility crash on Streamlit Cloud.
+# \* Generate an AI edit plan (ChatGPT)
 
-## Important note
+# \* Automatically detect important scenes
 
-The renderer only executes structured fields from the AI plan, such as:
+# \* Cut the video into a short (no manual editing needed)
 
-- `hook`
-- `recommended_start`
-- `recommended_end`
-- `caption_lines`
-- `logo_overlay_seconds`
-- `credit_screen_text`
+# \* Add:
 
-The `editing_notes` field is shown as guidance only. It is not automatically executed unless the feature is implemented in the renderer.
+# 
 
-## Recommended future features
+# &#x20; \* Title overlay
 
-- Whisper auto-transcription
-- Automatic subtitle timing by speech
-- Real scene detection
-- Automatic jump cuts
-- Beat-synced music cuts
-- Logo placement presets
-- Brand template system
-- Multi-language subtitles
-- LinkedIn / TikTok / YouTube Shorts export presets
-- Batch processing
-- Cloud rendering queue
+# &#x20; \* Captions / felirat
+
+# &#x20; \* Optional logo
+
+# &#x20; \* Optional background music
+
+# &#x20; \* Premium credit screen
+
+# \* Export a ready-to-post short video
+
+# 
+
+# \---
+
+# 
+
+# \# 🧠 Core idea
+
+# 
+
+# Most tools edit video.
+
+# 
+
+# This tool decides:
+
+# 
+
+# > \*\*Which parts of the video actually matter\*\*
+
+# 
+
+# \---
+
+# 
+
+# \# ✂️ Smart Scene Cutting
+
+# 
+
+# The app uses lightweight scene detection:
+
+# 
+
+# 1\. Samples frames across the video
+
+# 2\. Detects visual changes
+
+# 3\. Splits into segments
+
+# 4\. Selects best scenes
+
+# 5\. Combines them into a short
+
+# 
+
+# No manual trimming needed.
+
+# 
+
+# \---
+
+# 
+
+# \# 🎬 Premium Credit Screen
+
+# 
+
+# The video ends with a clean LinkedIn-style credit:
+
+# 
+
+# ```
+
+# BUDAPEST BIKE MAFFIA
+
+# 
+
+# ────────
+
+# 
+
+# EDITED BY
+
+# 
+
+# Alexander Berg
+
+# ```
+
+# 
+
+# Features:
+
+# 
+
+# \* Centered layout
+
+# \* Clean typography
+
+# \* Dark premium background
+
+# \* Fade in / fade out
+
+# 
+
+# \---
+
+# 
+
+# \# ⚙️ Recommended Settings
+
+# 
+
+# ```
+
+# Output format: Same as original - no resize
+
+# Target length: 30 sec
+
+# 
+
+# Smart scene cutting: ON
+
+# Scenes: 4
+
+# Sensitivity: 32
+
+# 
+
+# Logo size: 380
+
+# Caption size: 78
+
+# Credit size: 92
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \# 📦 Installation
+
+# 
+
+# ```bash
+
+# pip install -r requirements.txt
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \# ▶️ Run the app
+
+# 
+
+# ```bash
+
+# streamlit run app.py
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \# 🔐 Environment variables
+
+# 
+
+# Create a `.env` file:
+
+# 
+
+# ```env
+
+# OPENAI\_API\_KEY=your\_api\_key\_here
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \# 🧪 Tech Stack
+
+# 
+
+# \* Streamlit
+
+# \* OpenAI API
+
+# \* MoviePy
+
+# \* Pillow
+
+# \* NumPy
+
+# \* FFmpeg (via imageio-ffmpeg)
+
+# 
+
+# \---
+
+# 
+
+# \# ⚠️ Notes
+
+# 
+
+# \* The AI generates a plan, but:
+
+# 
+
+# &#x20; \* only structured fields are executed
+
+# &#x20; \* `editing\_notes` is informational
+
+# \* Smart cutting works even without AI
+
+# \* “Same as original” avoids video stretching issues
+
+# 
+
+# \---
+
+# 
+
+# \# 🔮 Recommended Future Features
+
+# 
+
+# \* 🎤 Whisper auto-transcription
+
+# \* ⏱️ Word-level subtitle timing
+
+# \* 🧠 Face / emotion detection
+
+# \* 🎵 Beat-based editing
+
+# \* 📱 Export presets (TikTok / Reels / Shorts)
+
+# \* 🎨 Brand templates
+
+# \* 📊 Analytics (views, retention)
+
+# \* ☁️ Cloud rendering queue
+
+# 
+
+# \---
+
+# 
+
+# \# 👤 Author
+
+# 
+
+# \*\*Alexander Berg\*\*
+
+# Budapest, Hungary
+
+# 
+
+# \---
+
+# 
+
+# \# 💡 Vision
+
+# 
+
+# This is not just a video editor.
+
+# 
+
+# It’s a step toward:
+
+# 
+
+# > \*\*AI-powered content systems that understand what matters\*\*
 
 
-## Streamlit Cloud compatibility
 
-This version uses the FFmpeg binary bundled by `imageio-ffmpeg`, so it does not require a system-level `ffmpeg` command to be installed.
-
-
-## Compatibility update
-
-Logo resizing is also handled with Pillow instead of MoviePy, avoiding the same `Image.ANTIALIAS` issue.
-
-
-## v10 no-stretch update
-
-Added `Same as original - no resize` and `setsar=1` in FFmpeg export to prevent pixel-aspect-ratio distortion.
