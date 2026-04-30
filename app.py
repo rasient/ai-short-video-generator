@@ -4,6 +4,7 @@ import json
 import tempfile
 import subprocess
 from pathlib import Path
+import imageio_ffmpeg
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -218,8 +219,10 @@ def ffmpeg_resize_video(input_path, output_path, target_format, resize_mode):
             f"pad={target_w}:{target_h}:(ow-iw)/2:(oh-ih)/2:black"
         )
 
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+
     cmd = [
-        "ffmpeg",
+        ffmpeg_exe,
         "-y",
         "-i", str(input_path),
         "-vf", vf,
@@ -231,7 +234,12 @@ def ffmpeg_resize_video(input_path, output_path, target_format, resize_mode):
         str(output_path),
     ]
 
-    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        error_text = e.stderr.decode("utf-8", errors="ignore") if e.stderr else str(e)
+        raise RuntimeError(f"FFmpeg resize failed: {error_text[:1200]}")
+
 
 
 def load_font(size, bold=False):

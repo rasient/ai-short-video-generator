@@ -53,3 +53,8 @@ The `editing_notes` field is shown as guidance only. It is not automatically exe
 - LinkedIn / TikTok / YouTube Shorts export presets
 - Batch processing
 - Cloud rendering queue
+
+
+## Streamlit Cloud compatibility
+
+This version uses the FFmpeg binary bundled by `imageio-ffmpeg`, so it does not require a system-level `ffmpeg` command to be installed.
