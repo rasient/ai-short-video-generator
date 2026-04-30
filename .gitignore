@@ -1,10 +1,6 @@
 .env
 __pycache__/
 *.pyc
-.DS_Store
-.venv/
-venv/
-output/
 *.mp4
 *.mov
 *.avi
@@ -12,3 +8,5 @@ output/
 *.mp3
 *.wav
 *.m4a
+.venv/
+venv/
