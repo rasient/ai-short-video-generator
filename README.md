@@ -58,3 +58,8 @@ The `editing_notes` field is shown as guidance only. It is not automatically exe
 ## Streamlit Cloud compatibility
 
 This version uses the FFmpeg binary bundled by `imageio-ffmpeg`, so it does not require a system-level `ffmpeg` command to be installed.
+
+
+## Compatibility update
+
+Logo resizing is also handled with Pillow instead of MoviePy, avoiding the same `Image.ANTIALIAS` issue.

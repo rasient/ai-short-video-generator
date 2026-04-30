@@ -303,6 +303,25 @@ def make_text_overlay(text, duration, size, position="bottom", font_size=58):
     return clip.set_position(("center", height - overlay_h - 80))
 
 
+
+def make_logo_clip(logo_path, duration, target_width=220):
+    """
+    Resize logo with Pillow, not MoviePy, to avoid Image.ANTIALIAS crashes.
+    """
+    logo_img = Image.open(logo_path).convert("RGBA")
+    original_w, original_h = logo_img.size
+
+    if original_w <= 0 or original_h <= 0:
+        raise ValueError("Invalid logo image size.")
+
+    scale = target_width / original_w
+    target_height = max(1, int(original_h * scale))
+
+    logo_img = logo_img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+
+    return ImageClip(np.array(logo_img)).set_duration(duration)
+
+
 def make_credit_screen(text, duration, size):
     width, height = size
     bg = ColorClip(size=(width, height), color=(12, 12, 12)).set_duration(duration)
@@ -364,9 +383,7 @@ def render_video(uploaded_video_file, music_file, logo_file, plan):
         save_uploaded_file(uploaded_logo, logo_path)
         logo_duration = min(float(plan.get("logo_overlay_seconds", 2)), video.duration)
         logo = (
-            ImageClip(str(logo_path))
-            .resize(width=220)
-            .set_duration(logo_duration)
+            make_logo_clip(logo_path, logo_duration, target_width=220)
             .set_position(("center", 80))
             .fadein(0.15)
             .fadeout(0.2)
