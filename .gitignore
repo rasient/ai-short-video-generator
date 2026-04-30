@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+venv/
+output/
+*.mp4
+*.mov
+*.avi
+*.m4v
+*.mp3
+*.wav
+*.m4a
