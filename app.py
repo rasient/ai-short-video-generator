@@ -45,6 +45,14 @@ with st.sidebar:
     mute_original = st.checkbox("Mute original audio", value=False)
     add_title_overlay = st.checkbox("Add title overlay", value=True)
     add_captions = st.checkbox("Add captions / felirat", value=True)
+    resize_mode = st.selectbox(
+        "Resize mode",
+        [
+            "Crop to fill - best for Shorts/Reels",
+            "Fit with padding - never stretch",
+        ],
+        index=1,
+    )
     use_background_music = st.checkbox("Use background music", value=False)
     add_credit_screen = st.checkbox("Add credit screen", value=True)
     use_crossfade = st.checkbox("Use gentle fade in/out", value=True)
@@ -193,21 +201,45 @@ def get_target_size(target_format):
 
 
 def resize_for_format(video, target_format):
+    """
+    Resize without stretching.
+
+    Crop to fill:
+    - Preserves aspect ratio
+    - Fills the whole frame
+    - Crops edges if needed
+
+    Fit with padding:
+    - Preserves aspect ratio
+    - Shows the full original video
+    - Adds black padding where needed
+    """
     target_w, target_h = get_target_size(target_format)
 
-    # Resize to fill, then crop center
-    scale = max(target_w / video.w, target_h / video.h)
-    video = video.resize(scale)
+    if resize_mode.startswith("Crop to fill"):
+        scale = max(target_w / video.w, target_h / video.h)
+        resized = video.resize(scale)
 
-    x_center = video.w / 2
-    y_center = video.h / 2
+        return resized.crop(
+            x_center=resized.w / 2,
+            y_center=resized.h / 2,
+            width=target_w,
+            height=target_h,
+        )
 
-    return video.crop(
-        x_center=x_center,
-        y_center=y_center,
-        width=target_w,
-        height=target_h,
-    )
+    # Fit with padding - never stretch
+    scale = min(target_w / video.w, target_h / video.h)
+    resized = video.resize(scale)
+
+    background = ColorClip(
+        size=(target_w, target_h),
+        color=(0, 0, 0),
+    ).set_duration(resized.duration)
+
+    return CompositeVideoClip(
+        [background, resized.set_position(("center", "center"))],
+        size=(target_w, target_h),
+    ).set_duration(resized.duration)
 
 
 def load_font(size, bold=False):
@@ -400,13 +432,21 @@ def render_video(uploaded_video_file, music_file, logo_file, plan):
 
 
 def concatenate_safe(clips, target_size):
-    # local import avoids startup issues
     from moviepy.editor import concatenate_videoclips
+
     fixed = []
+    target_w, target_h = target_size
+
     for c in clips:
-        if c.size != list(target_size) and c.size != target_size:
-            c = c.resize(target_size)
+        if tuple(c.size) != tuple(target_size):
+            # Never stretch here. Put mismatched clips on a black canvas.
+            bg = ColorClip(size=(target_w, target_h), color=(0, 0, 0)).set_duration(c.duration)
+            c = CompositeVideoClip(
+                [bg, c.set_position(("center", "center"))],
+                size=(target_w, target_h),
+            ).set_duration(c.duration)
         fixed.append(c)
+
     return concatenate_videoclips(fixed, method="compose")
 
 
