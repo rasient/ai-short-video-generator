@@ -1,649 +1,366 @@
-import os
-import json
+﻿import os
+import requests
 import tempfile
 import subprocess
+import imageio_ffmpeg
 from pathlib import Path
 
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from moviepy.editor import (
+    VideoFileClip,
+    AudioFileClip,
+    CompositeVideoClip,
+    CompositeAudioClip,
+    ImageClip,
+    concatenate_videoclips,
+)
+from moviepy.video.fx.all import speedx
 from dotenv import load_dotenv
 from openai import OpenAI
-import imageio_ffmpeg
-
-from moviepy.editor import (
-VideoFileClip,
-AudioFileClip,
-CompositeVideoClip,
-CompositeAudioClip,
-ImageClip,
-ColorClip,
-concatenate_videoclips,
-)
 
 load_dotenv()
 
-st.set_page_config(page_title="AI Short Video Generator", page_icon="🎬", layout="wide")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
 
+st.set_page_config(page_title="AI Short Video Generator", layout="wide")
 st.title("🎬 AI Short Video Generator")
-st.write("Upload a raw video and generate a short video with smart cuts, captions, logo, music, and premium credit.")
-
-api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key) if api_key else None
 
 with st.sidebar:
-st.header("Video Settings")
+    target_length = st.slider("Target length (sec)", 10, 90, 30)
+    use_smart = st.checkbox("Smart scene cutting", True)
+    sensitivity = st.slider("Scene sensitivity", 10.0, 80.0, 24.0)
+    logo_size = st.slider("Logo size", 100, 700, 320)
+    caption_size = st.slider("Caption size", 30, 110, 64)
+    credit_size = st.slider("Credit size", 40, 140, 86)
+    mute_original = st.checkbox("Mute original audio", True)
+    use_music = st.checkbox("Use background music", True)
 
-```
-target_format = st.selectbox(
-    "Output format",
-    ["Same as original - no resize", "9:16 vertical", "1:1 square", "16:9 horizontal"],
-    index=0,
-)
-
-resize_mode = st.selectbox(
-    "Resize mode",
-    ["Fit with padding - never stretch", "Crop to fill - best for Shorts/Reels"],
-    index=0,
-)
-
-target_length = st.slider("Target length seconds", 10, 90, 30)
-
-st.subheader("Smart Scene Cutting")
-use_smart_cutting = st.checkbox("Use smart scene cutting", value=True)
-max_scenes = st.slider("Maximum scenes", 1, 8, 4)
-min_scene_seconds = st.slider("Minimum scene length", 1.0, 8.0, 2.0, step=0.5)
-scene_sensitivity = st.slider("Scene sensitivity", 10.0, 80.0, 32.0, step=2.0)
-
-st.subheader("Overlays")
-logo_width = st.slider("Logo size", 120, 700, 380)
-title_size = st.slider("Title size", 40, 130, 84)
-caption_size = st.slider("Caption size", 36, 120, 78)
-credit_size = st.slider("Credit name size", 40, 140, 92)
-
-mute_original = st.checkbox("Mute original audio", value=False)
-add_title = st.checkbox("Add title overlay", value=True)
-add_captions = st.checkbox("Add captions / felirat", value=True)
-add_credit = st.checkbox("Add premium credit screen", value=True)
-use_music = st.checkbox("Use background music", value=False)
-use_fade = st.checkbox("Use gentle fade", value=True)
-```
-
-uploaded_video = st.file_uploader("Upload video", type=["mp4", "mov", "m4v", "avi"])
+uploaded_video = st.file_uploader("Upload video", type=["mp4", "mov", "m4v"])
 uploaded_logo = st.file_uploader("Optional logo", type=["png", "jpg", "jpeg"])
 
-col1, col2 = st.columns(2)
-
-with col1:
-title = st.text_input("Short video title", "Volunteers making sandwiches")
-organization = st.text_input("Organization / project", "Budapest Bike Maffia")
-credit_role = st.text_input("Credit role", "Edited by")
-credit_name = st.text_input("Your name", "Alexander Berg")
-
-with col2:
-description = st.text_area(
-"Description / instructions",
-"Make this emotional, human, short, with Hungarian captions.",
-height=120,
-)
-
-caption_text = st.text_area(
-"Caption / felirat text",
-"Önkéntesek készítenek szendvicseket.\nEgy kis segítség.\nValódi emberi hatás.",
-height=140,
-)
-
-background_music = None
+music_file = None
 if use_music:
-background_music = st.file_uploader("Upload background music", type=["mp3", "wav", "m4a"])
+    st.info("Use 'Find best free music' below, preview a track, then generate the video.")
 
-def save_uploaded_file(uploaded_file, path):
-with open(path, "wb") as f:
-f.write(uploaded_file.getbuffer())
+title = st.text_input("Title", "Volunteers making sandwiches")
+organization = st.text_input("Organization", "Budapest Bike Maffia")
+name = st.text_input("Your name", "Alexander Berg")
+role = st.text_input("Role", "Edited by")
 
-def get_target_size(fmt):
-if fmt == "9:16 vertical":
-return 1080, 1920
-if fmt == "1:1 square":
-return 1080, 1080
-if fmt == "16:9 horizontal":
-return 1920, 1080
-return None
-
-def ffmpeg_resize(input_path, output_path, fmt, mode):
-ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-
-```
-if fmt == "Same as original - no resize":
-    vf = "setsar=1"
-else:
-    w, h = get_target_size(fmt)
-    if mode.startswith("Crop"):
-        vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
-    else:
-        vf = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black,setsar=1"
-
-cmd = [
-    ffmpeg_exe,
-    "-y",
-    "-i",
-    str(input_path),
-    "-vf",
-    vf,
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
-    "-crf",
-    "23",
-    "-c:a",
-    "aac",
-    "-movflags",
-    "+faststart",
-    str(output_path),
-]
-
-subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-```
-
-def load_font(size, bold=False):
-candidates = [
-"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-"/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-]
-
-```
-for path in candidates:
-    try:
-        return ImageFont.truetype(path, size)
-    except Exception:
-        pass
-
-return ImageFont.load_default()
-```
-
-def make_text_overlay(text, duration, size, position="bottom", font_size=78):
-width, height = size
-overlay_h = max(280, int(height * 0.17)) if position == "bottom" else max(240, int(height * 0.14))
-
-```
-img = Image.new("RGBA", (width, overlay_h), (0, 0, 0, 0))
-draw = ImageDraw.Draw(img)
-font = load_font(font_size, bold=True)
-
-max_width = int(width * 0.86)
-words = text.split()
-lines = []
-current = ""
-
-for word in words:
-    test = f"{current} {word}".strip()
-    bbox = draw.textbbox((0, 0), test, font=font)
-    if bbox[2] - bbox[0] <= max_width:
-        current = test
-    else:
-        if current:
-            lines.append(current)
-        current = word
-
-if current:
-    lines.append(current)
-
-lines = lines[:3]
-line_h = font_size + 14
-total_h = len(lines) * line_h
-y = max(8, (overlay_h - total_h) // 2)
-
-for line in lines:
-    bbox = draw.textbbox((0, 0), line, font=font)
-    text_w = bbox[2] - bbox[0]
-    x = (width - text_w) // 2
-
-    for dx, dy in [(-4, -4), (4, -4), (-4, 4), (4, 4), (0, 4)]:
-        draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 230))
-
-    draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
-    y += line_h
-
-clip = ImageClip(np.array(img)).set_duration(duration)
-
-if position == "top":
-    return clip.set_position(("center", int(height * 0.04)))
-
-return clip.set_position(("center", height - overlay_h - int(height * 0.04)))
-```
-
-def make_logo_clip(logo_path, duration, target_width):
-img = Image.open(logo_path).convert("RGBA")
-w, h = img.size
-scale = target_width / max(1, w)
-new_h = max(1, int(h * scale))
-img = img.resize((target_width, new_h), Image.Resampling.LANCZOS)
-return ImageClip(np.array(img)).set_duration(duration)
-
-def centered_text(draw, text, font, y, width, fill):
-bbox = draw.textbbox((0, 0), text, font=font)
-x = (width - (bbox[2] - bbox[0])) // 2
-draw.text((x, y), text, font=font, fill=fill)
-return y + (bbox[3] - bbox[1])
-
-def make_premium_credit(size, organization, role, name, duration=3.2, name_size=92):
-width, height = size
-img = Image.new("RGBA", (width, height), (10, 12, 16, 255))
-draw = ImageDraw.Draw(img)
-
-```
-for y in range(height):
-    alpha = int(18 * (y / max(1, height)))
-    draw.line([(0, y), (width, y)], fill=(18 + alpha, 22 + alpha, 30 + alpha, 255))
-
-org_font = load_font(max(28, int(name_size * 0.38)), bold=False)
-role_font = load_font(max(30, int(name_size * 0.48)), bold=False)
-name_font = load_font(name_size, bold=True)
-small_font = load_font(max(24, int(name_size * 0.30)), bold=False)
-
-org = (organization or "Budapest Bike Maffia").upper()
-role_text = (role or "Edited by").upper()
-person = name or "Alexander Berg"
-
-y = int(height * 0.37)
-
-y = centered_text(draw, org, org_font, y, width, (210, 218, 230, 255))
-y += 32
-
-line_w = int(width * 0.22)
-x1 = (width - line_w) // 2
-draw.rounded_rectangle([x1, y, x1 + line_w, y + 4], radius=2, fill=(90, 160, 130, 255))
-y += 36
-
-y = centered_text(draw, role_text, role_font, y, width, (150, 162, 178, 255))
-y += 18
-
-y = centered_text(draw, person, name_font, y, width, (255, 255, 255, 255))
-y += 34
-
-centered_text(draw, "SHORT VIDEO SYSTEM", small_font, y, width, (120, 132, 150, 255))
-
-margin = int(min(width, height) * 0.045)
-draw.rounded_rectangle(
-    [margin, margin, width - margin, height - margin],
-    radius=26,
-    outline=(255, 255, 255, 28),
-    width=2,
+captions = st.text_area(
+    "Caption / felirat text",
+    "Önkéntesek készítenek szendvicseket.\nEgy kis segítség.\nValódi emberi hatás.",
+    height=120,
 )
 
-return ImageClip(np.array(img)).set_duration(duration).fadein(0.45).fadeout(0.55)
-```
 
-def detect_scene_segments(video, sensitivity, min_scene_len):
-duration = float(video.duration)
-cuts = [0.0]
-previous = None
-motion_scores = []
-
-```
-for t in np.arange(0, duration, 1.0):
+def font(size, bold=False):
     try:
-        frame = video.get_frame(float(t))
-        small = Image.fromarray(frame).convert("L").resize((96, 54))
-        arr = np.array(small).astype("float32")
-
-        if previous is not None:
-            diff = float(np.mean(np.abs(arr - previous)))
-            motion_scores.append((float(t), diff))
-
-            if diff > sensitivity and float(t) - cuts[-1] >= min_scene_len:
-                cuts.append(float(t))
-
-        previous = arr
+        return ImageFont.truetype("arial.ttf", size)
     except Exception:
-        continue
+        return ImageFont.load_default()
 
-if cuts[-1] < duration:
-    cuts.append(duration)
 
-segments = []
+def text_clip(text, size, duration, font_size, position):
+    w, h = size
+    img_h = max(180, int(h * 0.18))
+    img = Image.new("RGBA", (w, img_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    f = font(font_size, True)
 
-for i in range(len(cuts) - 1):
-    start = cuts[i]
-    end = cuts[i + 1]
+    lines = []
+    words = text.split()
+    cur = ""
 
-    if end - start < min_scene_len:
-        continue
+    for word in words:
+        test = (cur + " " + word).strip()
+        box = draw.textbbox((0, 0), test, font=f)
+        if box[2] - box[0] < int(w * 0.85):
+            cur = test
+        else:
+            lines.append(cur)
+            cur = word
 
-    scores = [score for ts, score in motion_scores if start <= ts < end]
-    avg_motion = float(np.mean(scores)) if scores else 0.0
-    score = avg_motion + min(end - start, 8.0) * 1.5 + (2.0 if start > 1.0 else 0.0)
+    if cur:
+        lines.append(cur)
 
-    segments.append(
-        {
-            "start": round(start, 2),
-            "end": round(end, 2),
-            "score": round(score, 2),
-        }
-    )
+    lines = lines[:3]
+    y = 20
 
-if not segments:
-    segments = [{"start": 0.0, "end": round(min(duration, target_length), 2), "score": 1.0}]
+    for line in lines:
+        box = draw.textbbox((0, 0), line, font=f)
+        x = (w - (box[2] - box[0])) // 2
 
-return segments
-```
+        for dx, dy in [(-3,-3), (3,-3), (-3,3), (3,3)]:
+            draw.text((x+dx, y+dy), line, font=f, fill=(0,0,0,230))
 
-def choose_best_segments(segments, target_duration, max_count):
-ranked = sorted(segments, key=lambda x: x["score"], reverse=True)
-selected = []
-total = 0.0
+        draw.text((x, y), line, font=f, fill=(255,255,255,255))
+        y += font_size + 12
 
-```
-for seg in ranked:
-    if len(selected) >= max_count:
-        break
+    clip = ImageClip(np.array(img)).set_duration(duration)
 
-    remaining = target_duration - total
-    if remaining <= 0:
-        break
+    if position == "top":
+        return clip.set_position(("center", int(h * 0.04)))
 
-    seg_len = seg["end"] - seg["start"]
-    if seg_len <= 0:
-        continue
+    return clip.set_position(("center", h - img_h - int(h * 0.05)))
 
-    take = min(seg_len, remaining)
 
-    selected.append(
-        {
-            "start": seg["start"],
-            "end": round(seg["start"] + take, 2),
-            "score": seg["score"],
-        }
-    )
+def logo_clip(path, duration, width):
+    img = Image.open(path).convert("RGBA")
+    w, h = img.size
+    new_h = int(h * (width / w))
+    img = img.resize((width, new_h), Image.Resampling.LANCZOS)
+    return ImageClip(np.array(img)).set_duration(duration)
 
-    total += take
 
-selected = sorted(selected, key=lambda x: x["start"])
+def credit_clip(size):
+    w, h = size
+    img = Image.new("RGBA", (w, h), (10, 12, 16, 255))
+    draw = ImageDraw.Draw(img)
 
-if not selected and segments:
-    selected = [segments[0]]
+    f1 = font(max(24, credit_size // 2), False)
+    f2 = font(credit_size, True)
+    f3 = font(max(22, credit_size // 3), False)
 
-return selected
-```
+    y = int(h * 0.35)
 
-def build_smart_short(video):
-segments = detect_scene_segments(video, scene_sensitivity, min_scene_seconds)
-selected = choose_best_segments(segments, float(target_length), int(max_scenes))
+    def center(txt, fnt, y_pos, fill):
+        box = draw.textbbox((0, 0), txt, font=fnt)
+        x = (w - (box[2] - box[0])) // 2
+        draw.text((x, y_pos), txt, font=fnt, fill=fill)
+        return y_pos + (box[3] - box[1])
 
-```
-clips = []
+    y = center(organization.upper(), f1, y, (210, 218, 230, 255))
+    y += 30
 
-for seg in selected:
-    try:
-        clips.append(video.subclip(seg["start"], seg["end"]))
-    except Exception:
-        pass
+    line_w = int(w * 0.22)
+    x1 = (w - line_w) // 2
+    draw.rounded_rectangle([x1, y, x1 + line_w, y + 4], radius=2, fill=(90, 160, 130, 255))
+    y += 35
 
-if not clips:
-    return video.subclip(0, min(video.duration, target_length)), selected
+    y = center(role.upper(), f3, y, (150, 162, 178, 255))
+    y += 18
 
-if len(clips) == 1:
-    return clips[0], selected
+    y = center(name, f2, y, (255, 255, 255, 255))
+    y += 34
 
-return concatenate_videoclips(clips, method="compose"), selected
-```
+    center("SHORT VIDEO SYSTEM", f3, y, (120, 132, 150, 255))
 
-def fallback_plan():
-caption_lines = [line.strip() for line in caption_text.splitlines() if line.strip()]
+    return ImageClip(np.array(img)).set_duration(3.2).fadein(0.5).fadeout(0.5)
 
-```
-return {
-    "hook": title,
-    "caption_lines": caption_lines,
-    "logo_overlay_seconds": 2,
-    "credit_screen_text": f"{organization} ©\n{credit_role} {credit_name}",
-    "editing_notes": "Fallback plan used.",
-}
-```
+def build(video):
+    max_output_seconds = float(target_length)
 
-def ai_plan():
-if not client:
-return fallback_plan()
+    if not use_smart:
+        return video.subclip(0, min(video.duration, max_output_seconds))
 
-```
-prompt = f"""
-```
+    clips = []
 
-Return only valid JSON.
+    # Show the whole sandwich-making process:
+    # beginning → middle → end
+    steps = 5
+    clip_length = max_output_seconds / steps
+    video_duration = float(video.duration)
 
-Create a short-video edit plan.
+    if video_duration <= max_output_seconds:
+        return video.subclip(0, video_duration)
 
-Fields:
-hook
-caption_lines
-logo_overlay_seconds
-credit_screen_text
-editing_notes
+    for i in range(steps):
+        position = i / max(1, steps - 1)
+        start = position * max(0, video_duration - clip_length)
+        end = min(start + clip_length, video_duration)
 
-Title: {title}
-Description: {description}
-Captions:
-{caption_text}
+        clip = video.subclip(start, end)
 
-Credit:
-{organization} ©
-{credit_role} {credit_name}
-"""
+        # Slow down action/process moments slightly
+        clip = clip.fx(speedx, 1.0)
 
-````
-try:
+        clips.append(clip)
+
+    final_short = concatenate_videoclips(clips, method="compose")
+
+    if final_short.duration > max_output_seconds:
+        final_short = final_short.subclip(0, max_output_seconds)
+
+    return final_short
+
+def normalize_video(input_path, output_path):
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i", str(input_path),
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1",
+        "-metadata:s:v:0", "rotate=0",
+        "-map_metadata", "-1",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "20",
+        "-c:a", "aac",
+        "-shortest",
+        str(output_path),
+    ]
+
+    subprocess.run(cmd, check=True)
+    
+def ai_music_query(title, captions, description=""):
+    text = f"""
+    Choose 3 short music search keywords for this video.
+    Video title: {title}
+    Captions: {captions}
+    Description: {description}
+
+    Return only a simple search phrase.
+    Example: soft emotional instrumental
+    """
+
+    if not client:
+        return "soft emotional instrumental"
+
     response = client.responses.create(
         model="gpt-4.1-mini",
-        input=prompt,
+        input=text,
     )
 
-    text = response.output_text.strip()
+    return response.output_text.strip().replace('"', "")
+    
+def search_jamendo_music(query, limit=5):
+    client_id = os.getenv("JAMENDO_CLIENT_ID")
 
-    if text.startswith("```"):
-        text = text.replace("```json", "").replace("```", "").strip()
+    url = "https://api.jamendo.com/v3.0/tracks/"
+    params = {
+        "client_id": client_id,
+        "format": "json",
+        "limit": limit,
+        "search": query,
+        "include": "licenses musicinfo",
+        "audioformat": "mp32",
+        "audiodlformat": "mp32",
+    }
 
-    return json.loads(text)
+    r = requests.get(url, params=params, timeout=20)
+    r.raise_for_status()
 
-except Exception as e:
-    plan = fallback_plan()
-    plan["editing_notes"] = f"AI failed, fallback used: {e}"
-    return plan
-````
+    return r.json().get("results", [])
+    
+def download_music(url, output_path):
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
 
-def concatenate_safe(clips, target_size):
-fixed = []
-target_w, target_h = target_size
+    with open(output_path, "wb") as f:
+        f.write(r.content)
 
-```
-for clip in clips:
-    if tuple(clip.size) != tuple(target_size):
-        bg = ColorClip(size=(target_w, target_h), color=(0, 0, 0)).set_duration(clip.duration)
-        clip = CompositeVideoClip(
-            [bg, clip.set_position(("center", "center"))],
-            size=(target_w, target_h),
-        ).set_duration(clip.duration)
+    return output_path
+    
+if st.button("Find best free music"):
+    query = ai_music_query(title, captions)
+    st.write("AI music search:", query)
 
-    fixed.append(clip)
+    tracks = search_jamendo_music(query)
+    st.session_state["tracks"] = tracks
 
-return concatenate_videoclips(fixed, method="compose")
-```
+if "tracks" in st.session_state:
+    options = {
+        f"{t['name']} — {t['artist_name']}": t
+        for t in st.session_state["tracks"]
+    }
 
-def render_video(uploaded_video, uploaded_logo, uploaded_music, plan):
-temp_dir = Path(tempfile.mkdtemp())
+    selected = st.selectbox("Preview and choose music", list(options.keys()))
+    track = options[selected]
 
-```
-input_path = temp_dir / "input.mp4"
-trimmed_path = temp_dir / "trimmed.mp4"
-resized_path = temp_dir / "resized.mp4"
-output_path = temp_dir / "final.mp4"
+    st.audio(track["audio"])
+    st.write("License:", track.get("license_ccurl", "Check license"))
 
-save_uploaded_file(uploaded_video, input_path)
-
-video = VideoFileClip(str(input_path))
-
-if use_smart_cutting:
-    short, selected = build_smart_short(video)
-    st.session_state["selected_segments"] = selected
-else:
-    short = video.subclip(0, min(video.duration, target_length))
-    st.session_state["selected_segments"] = [{"start": 0, "end": min(video.duration, target_length), "score": 0}]
-
-short.write_videofile(
-    str(trimmed_path),
-    codec="libx264",
-    audio_codec="aac",
-    fps=30,
-    preset="ultrafast",
-    threads=2,
-    verbose=False,
-    logger=None,
-    ffmpeg_params=["-vf", "setsar=1"],
-)
-
-ffmpeg_resize(trimmed_path, resized_path, target_format, resize_mode)
-
-base_video = VideoFileClip(str(resized_path))
-size = (int(base_video.w), int(base_video.h))
-
-if use_fade:
-    base_video = base_video.fadein(0.2).fadeout(0.3)
-
-layers = [base_video]
-
-if uploaded_logo is not None:
-    logo_path = temp_dir / "logo.png"
-    save_uploaded_file(uploaded_logo, logo_path)
-
-    logo = (
-        make_logo_clip(
-            logo_path,
-            min(float(plan.get("logo_overlay_seconds", 2)), base_video.duration),
-            logo_width,
-        )
-        .set_position(("center", int(size[1] * 0.04)))
-        .fadein(0.15)
-        .fadeout(0.2)
-    )
-
-    layers.append(logo)
-
-if add_title:
-    layers.append(
-        make_text_overlay(
-            plan.get("hook", title),
-            min(4, base_video.duration),
-            size,
-            "top",
-            title_size,
-        )
-    )
-
-if add_captions:
-    lines = plan.get("caption_lines", [])
-    lines = [line for line in lines if str(line).strip()][:8]
-
-    if lines:
-        segment_duration = max(1.2, base_video.duration / len(lines))
-
-        for i, line in enumerate(lines):
-            start = i * segment_duration
-
-            if start >= base_video.duration:
-                break
-
-            duration = min(segment_duration, base_video.duration - start)
-
-            layers.append(
-                make_text_overlay(
-                    str(line),
-                    duration,
-                    size,
-                    "bottom",
-                    caption_size,
-                ).set_start(start)
-            )
-
-final = CompositeVideoClip(layers, size=size).set_duration(base_video.duration)
-
-if add_credit:
-    credit = make_premium_credit(
-        size,
-        organization,
-        credit_role,
-        credit_name,
-        duration=3.2,
-        name_size=credit_size,
-    )
-    final = concatenate_safe([final, credit], size)
-
-audio_tracks = []
-
-if not mute_original and base_video.audio:
-    audio_tracks.append(base_video.audio.volumex(0.75))
-
-if uploaded_music is not None:
-    music_path = temp_dir / "music.mp3"
-    save_uploaded_file(uploaded_music, music_path)
-
-    music = AudioFileClip(str(music_path))
-    music = music.subclip(0, min(final.duration, music.duration)).volumex(0.18)
-    audio_tracks.append(music)
-
-if audio_tracks:
-    final = final.set_audio(CompositeAudioClip(audio_tracks))
-else:
-    final = final.without_audio()
-
-final.write_videofile(
-    str(output_path),
-    codec="libx264",
-    audio_codec="aac",
-    fps=30,
-    preset="ultrafast",
-    threads=2,
-    ffmpeg_params=["-vf", "setsar=1"],
-)
-
-return output_path
-```
+    st.session_state["selected_music_url"] = track.get("audiodownload") or track.get("audio")
 
 if uploaded_video:
-st.video(uploaded_video)
+    if st.button("Generate Short"):
+        temp = Path(tempfile.mkdtemp())
 
-```
-if st.button("✨ Generate AI edit plan"):
-    with st.spinner("Creating AI edit plan..."):
-        st.session_state["plan"] = ai_plan()
+        video_path = temp / "input.mp4"
+        out_path = temp / "output.mp4"
 
-if "plan" in st.session_state:
-    st.subheader("AI Edit Plan")
-    st.json(st.session_state["plan"])
+        with open(video_path, "wb") as f:
+            f.write(uploaded_video.getbuffer())
 
-    if st.button("🎞️ Generate Short Video"):
-        with st.spinner("Rendering video..."):
-            output = render_video(
-                uploaded_video,
-                uploaded_logo,
-                background_music,
-                st.session_state["plan"],
+        normalized_path = temp / "normalized.mp4"
+        normalize_video(video_path, normalized_path)
+        video = VideoFileClip(str(normalized_path))
+        short = build(video)
+
+        size = (int(short.w), int(short.h))
+        layers = [short]
+
+        layers.append(text_clip(title, size, min(4, short.duration), caption_size, "top"))
+
+        cap_lines = [x.strip() for x in captions.splitlines() if x.strip()]
+        if cap_lines:
+            dur = max(1.2, short.duration / len(cap_lines))
+            for i, line in enumerate(cap_lines[:8]):
+                start = i * dur
+                if start >= short.duration:
+                    break
+                layers.append(text_clip(line, size, min(dur, short.duration - start), caption_size, "bottom").set_start(start))
+
+        if uploaded_logo:
+            logo_path = temp / "logo.png"
+            with open(logo_path, "wb") as f:
+                f.write(uploaded_logo.getbuffer())
+
+            layers.append(
+                logo_clip(logo_path, min(3, short.duration), logo_size)
+                .set_position(("center", int(size[1] * 0.04)))
+                .fadein(0.2)
+                .fadeout(0.2)
             )
 
-            st.success("Short video generated.")
+        final = CompositeVideoClip(layers, size=size).set_duration(short.duration)
 
-            st.subheader("Selected scenes")
-            st.json(st.session_state.get("selected_segments", []))
+        credit = credit_clip(size)
+        final = concatenate_videoclips([final, credit], method="compose")
 
-            st.video(str(output))
+        audio_tracks = []
 
-            with open(output, "rb") as f:
-                st.download_button(
-                    "Download final short video",
-                    data=f,
-                    file_name="final_short_video.mp4",
-                    mime="video/mp4",
-                )
-```
+        if not mute_original and short.audio:
+            audio_tracks.append(short.audio.volumex(0.75))
 
-else:
-st.info("Upload a video to begin.")
+        if use_music and st.session_state.get("selected_music_url"):
+            music_path = temp / "music.mp3"
+            download_music(st.session_state["selected_music_url"], music_path)
+
+            music_clip = AudioFileClip(str(music_path))
+            music_clip = music_clip.subclip(0, min(final.duration, music_clip.duration))
+            audio_tracks.append(music_clip.volumex(0.18))
+
+        if audio_tracks:
+            final = final.set_audio(CompositeAudioClip(audio_tracks))
+        else:
+            final = final.without_audio()
+
+        max_final_duration = float(target_length) + 3.5
+
+        if final.duration > max_final_duration:
+            final = final.subclip(0, max_final_duration)
+
+        if final.audio:
+            final = final.set_audio(final.audio.subclip(0, final.duration))
+
+        final.write_videofile(
+            str(out_path),
+            codec="libx264",
+            audio_codec="aac",
+            fps=30,
+            ffmpeg_params=["-shortest", "-vf", "setsar=1"],
+        )
+
+        st.success("Done!")
+        col1, col2, col3 = st.columns([1,2,1])
+
+        with col2:
+            st.video(str(out_path), width=320)
+
+        with open(out_path, "rb") as f:
+            st.download_button("Download video", f, "final_short_video.mp4", "video/mp4")
