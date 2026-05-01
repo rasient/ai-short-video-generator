@@ -20,6 +20,7 @@ from moviepy.video.fx.all import speedx
 from dotenv import load_dotenv
 from openai import OpenAI
 
+
 load_dotenv()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
@@ -29,20 +30,23 @@ st.title("🎬 AI Short Video Generator")
 
 with st.sidebar:
     target_length = st.slider("Target length (sec)", 10, 90, 30)
-    use_smart = st.checkbox("Smart scene cutting", True)
-    sensitivity = st.slider("Scene sensitivity", 10.0, 80.0, 24.0)
+    use_smart = st.checkbox("Smart process cutting", True)
     logo_size = st.slider("Logo size", 100, 700, 320)
     caption_size = st.slider("Caption size", 30, 110, 64)
     credit_size = st.slider("Credit size", 40, 140, 86)
     mute_original = st.checkbox("Mute original audio", True)
-    use_music = st.checkbox("Use background music", True)
+    use_music = st.checkbox("Use selected free background music", True)
 
-uploaded_video = st.file_uploader("Upload video", type=["mp4", "mov", "m4v"])
+uploaded_videos = st.file_uploader(
+    "Upload one or more videos",
+    type=["mp4", "mov", "m4v"],
+    accept_multiple_files=True,
+)
+
 uploaded_logo = st.file_uploader("Optional logo", type=["png", "jpg", "jpeg"])
 
-music_file = None
 if use_music:
-    st.info("Use 'Find best free music' below, preview a track, then generate the video.")
+    st.info("Click 'Find best free music', preview/select a track, then generate the video.")
 
 title = st.text_input("Title", "Volunteers making sandwiches")
 organization = st.text_input("Organization", "Budapest Bike Maffia")
@@ -56,7 +60,7 @@ captions = st.text_area(
 )
 
 
-def font(size, bold=False):
+def font(size):
     try:
         return ImageFont.truetype("arial.ttf", size)
     except Exception:
@@ -68,23 +72,25 @@ def text_clip(text, size, duration, font_size, position):
     img_h = max(180, int(h * 0.18))
     img = Image.new("RGBA", (w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    f = font(font_size, True)
+    f = font(font_size)
 
-    lines = []
     words = text.split()
-    cur = ""
+    lines = []
+    current = ""
 
     for word in words:
-        test = (cur + " " + word).strip()
+        test = (current + " " + word).strip()
         box = draw.textbbox((0, 0), test, font=f)
-        if box[2] - box[0] < int(w * 0.85):
-            cur = test
-        else:
-            lines.append(cur)
-            cur = word
 
-    if cur:
-        lines.append(cur)
+        if box[2] - box[0] < int(w * 0.85):
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+
+    if current:
+        lines.append(current)
 
     lines = lines[:3]
     y = 20
@@ -93,10 +99,10 @@ def text_clip(text, size, duration, font_size, position):
         box = draw.textbbox((0, 0), line, font=f)
         x = (w - (box[2] - box[0])) // 2
 
-        for dx, dy in [(-3,-3), (3,-3), (-3,3), (3,3)]:
-            draw.text((x+dx, y+dy), line, font=f, fill=(0,0,0,230))
+        for dx, dy in [(-3, -3), (3, -3), (-3, 3), (3, 3)]:
+            draw.text((x + dx, y + dy), line, font=f, fill=(0, 0, 0, 230))
 
-        draw.text((x, y), line, font=f, fill=(255,255,255,255))
+        draw.text((x, y), line, font=f, fill=(255, 255, 255, 255))
         y += font_size + 12
 
     clip = ImageClip(np.array(img)).set_duration(duration)
@@ -110,7 +116,7 @@ def text_clip(text, size, duration, font_size, position):
 def logo_clip(path, duration, width):
     img = Image.open(path).convert("RGBA")
     w, h = img.size
-    new_h = int(h * (width / w))
+    new_h = int(h * (width / max(1, w)))
     img = img.resize((width, new_h), Image.Resampling.LANCZOS)
     return ImageClip(np.array(img)).set_duration(duration)
 
@@ -120,9 +126,9 @@ def credit_clip(size):
     img = Image.new("RGBA", (w, h), (10, 12, 16, 255))
     draw = ImageDraw.Draw(img)
 
-    f1 = font(max(24, credit_size // 2), False)
-    f2 = font(credit_size, True)
-    f3 = font(max(22, credit_size // 3), False)
+    f1 = font(max(24, credit_size // 2))
+    f2 = font(credit_size)
+    f3 = font(max(22, credit_size // 3))
 
     y = int(h * 0.35)
 
@@ -150,16 +156,14 @@ def credit_clip(size):
 
     return ImageClip(np.array(img)).set_duration(3.2).fadein(0.5).fadeout(0.5)
 
-def build(video):
-    max_output_seconds = float(target_length)
+
+def build(video, custom_target_length=None):
+    max_output_seconds = float(custom_target_length or target_length)
 
     if not use_smart:
         return video.subclip(0, min(video.duration, max_output_seconds))
 
     clips = []
-
-    # Show the whole sandwich-making process:
-    # beginning → middle → end
     steps = 5
     clip_length = max_output_seconds / steps
     video_duration = float(video.duration)
@@ -173,10 +177,7 @@ def build(video):
         end = min(start + clip_length, video_duration)
 
         clip = video.subclip(start, end)
-
-        # Slow down action/process moments slightly
         clip = clip.fx(speedx, 1.0)
-
         clips.append(clip)
 
     final_short = concatenate_videoclips(clips, method="compose")
@@ -185,6 +186,7 @@ def build(video):
         final_short = final_short.subclip(0, max_output_seconds)
 
     return final_short
+
 
 def normalize_video(input_path, output_path):
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -205,30 +207,37 @@ def normalize_video(input_path, output_path):
     ]
 
     subprocess.run(cmd, check=True)
-    
+
+
 def ai_music_query(title, captions, description=""):
-    text = f"""
-    Choose 3 short music search keywords for this video.
-    Video title: {title}
-    Captions: {captions}
-    Description: {description}
-
-    Return only a simple search phrase.
-    Example: soft emotional instrumental
-    """
-
     if not client:
         return "soft emotional instrumental"
 
+    prompt = f"""
+Choose one simple free-music search phrase for this short video.
+
+Title: {title}
+Captions: {captions}
+Description: {description}
+
+Return only the phrase.
+Example: soft emotional instrumental
+"""
+
     response = client.responses.create(
         model="gpt-4.1-mini",
-        input=text,
+        input=prompt,
     )
 
     return response.output_text.strip().replace('"', "")
-    
+
+
 def search_jamendo_music(query, limit=5):
     client_id = os.getenv("JAMENDO_CLIENT_ID")
+
+    if not client_id:
+        st.error("Missing JAMENDO_CLIENT_ID in .env")
+        return []
 
     url = "https://api.jamendo.com/v3.0/tracks/"
     params = {
@@ -245,7 +254,8 @@ def search_jamendo_music(query, limit=5):
     r.raise_for_status()
 
     return r.json().get("results", [])
-    
+
+
 def download_music(url, output_path):
     r = requests.get(url, timeout=30)
     r.raise_for_status()
@@ -254,7 +264,8 @@ def download_music(url, output_path):
         f.write(r.content)
 
     return output_path
-    
+
+
 if st.button("Find best free music"):
     query = ai_music_query(title, captions)
     st.write("AI music search:", query)
@@ -262,7 +273,7 @@ if st.button("Find best free music"):
     tracks = search_jamendo_music(query)
     st.session_state["tracks"] = tracks
 
-if "tracks" in st.session_state:
+if "tracks" in st.session_state and st.session_state["tracks"]:
     options = {
         f"{t['name']} — {t['artist_name']}": t
         for t in st.session_state["tracks"]
@@ -276,37 +287,62 @@ if "tracks" in st.session_state:
 
     st.session_state["selected_music_url"] = track.get("audiodownload") or track.get("audio")
 
-if uploaded_video:
+
+if uploaded_videos:
     if st.button("Generate Short"):
         temp = Path(tempfile.mkdtemp())
-
-        video_path = temp / "input.mp4"
         out_path = temp / "output.mp4"
 
-        with open(video_path, "wb") as f:
-            f.write(uploaded_video.getbuffer())
+        video_clips = []
+        per_video_target = max(3, target_length / len(uploaded_videos))
 
-        normalized_path = temp / "normalized.mp4"
-        normalize_video(video_path, normalized_path)
-        video = VideoFileClip(str(normalized_path))
-        short = build(video)
+        for i, uploaded_video in enumerate(uploaded_videos):
+            input_path = temp / f"input_{i}.mp4"
+            normalized_path = temp / f"normalized_{i}.mp4"
+
+            with open(input_path, "wb") as f:
+                f.write(uploaded_video.getbuffer())
+
+            normalize_video(input_path, normalized_path)
+
+            clip = VideoFileClip(str(normalized_path))
+            short_clip = build(clip, custom_target_length=per_video_target)
+            video_clips.append(short_clip)
+
+        short = concatenate_videoclips(video_clips, method="compose")
+
+        if short.duration > target_length:
+            short = short.subclip(0, target_length)
 
         size = (int(short.w), int(short.h))
         layers = [short]
 
         layers.append(text_clip(title, size, min(4, short.duration), caption_size, "top"))
 
-        cap_lines = [x.strip() for x in captions.splitlines() if x.strip()]
-        if cap_lines:
-            dur = max(1.2, short.duration / len(cap_lines))
-            for i, line in enumerate(cap_lines[:8]):
+        caption_lines = [x.strip() for x in captions.splitlines() if x.strip()]
+
+        if caption_lines:
+            dur = max(1.2, short.duration / len(caption_lines))
+
+            for i, line in enumerate(caption_lines[:8]):
                 start = i * dur
+
                 if start >= short.duration:
                     break
-                layers.append(text_clip(line, size, min(dur, short.duration - start), caption_size, "bottom").set_start(start))
+
+                layers.append(
+                    text_clip(
+                        line,
+                        size,
+                        min(dur, short.duration - start),
+                        caption_size,
+                        "bottom",
+                    ).set_start(start)
+                )
 
         if uploaded_logo:
             logo_path = temp / "logo.png"
+
             with open(logo_path, "wb") as f:
                 f.write(uploaded_logo.getbuffer())
 
@@ -357,7 +393,8 @@ if uploaded_video:
         )
 
         st.success("Done!")
-        col1, col2, col3 = st.columns([1,2,1])
+
+        col1, col2, col3 = st.columns([1, 2, 1])
 
         with col2:
             st.video(str(out_path), width=320)
