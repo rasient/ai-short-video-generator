@@ -1,148 +1,105 @@
-# 🎬 AI Short Video Generator (Production Version)
+# 🎬 AI Short Video Generator
 
-## 🚀 Overview
+Create high-quality short videos automatically from one or more input videos.
 
-AI Short Video Generator is a system-driven video editing tool that transforms raw footage into structured, high-impact short videos.
-
-Instead of manual editing, it applies:
-- motion-based scene selection
-- multi-video merging
-- caption layering
-- branding (logo + credits)
-- AI-assisted music selection
-
----
-
-## 🎯 Key Features
-
-### 🎥 Multi-Video Input
-Upload multiple clips and automatically combine them into a single short video.
-
-### 🧠 Smart Motion-Based Cutting
-Detects high-motion (important) segments and prioritizes them.
-
-### ⚡ Dynamic Speed Control
-- Important scenes → slightly slowed down  
-- Less relevant scenes → slightly sped up  
-
-### 📱 Vertical Mode (9:16)
-Optional crop for TikTok / Reels / Shorts.
-
-### 📝 Captions
-- Multi-line smart wrapping  
-- Auto-timed display  
-
-### 🏷️ Branding
-- Logo overlay  
-- Title overlay  
-- Premium credit screen  
-
-### 🎵 Music System
-- AI generates search query  
-- Fetches free licensed tracks (Jamendo)  
-- Preview + select inside app  
-
-### 🔇 Audio Control
-- Mute original audio  
-- Mix with background music  
+## 🚀 Features
+- Multi-video upload & merging
+- Smart motion-based scene selection
+- Caption overlays (top + bottom)
+- Logo overlay
+- Credit screen
+- Vertical (9:16) mode
+- AI-powered music search (Jamendo)
+- Free music preview + selection
+- Automatic video normalization (FFmpeg)
+- Large file protection & warnings
 
 ---
 
-## 🧠 System Thinking
+## ⚙️ Setup
 
-This is not just a video editor.
-
-It is a **content production system**:
-
-Raw video  
-→ motion analysis  
-→ segment selection  
-→ narrative structure  
-→ visual + audio layering  
-→ final output  
-
----
-
-## 🛠️ Tech Stack
-
-- Python  
-- Streamlit  
-- MoviePy  
-- FFmpeg  
-- OpenAI API  
-- Jamendo API  
-- PIL (Pillow)  
-
----
-
-## ⚙️ Installation
-
+### 1. Clone repo
 ```bash
 git clone https://github.com/YOUR_USERNAME/ai-short-video-generator.git
 cd ai-short-video-generator
+```
 
+### 2. Install dependencies
+```bash
 pip install -r requirements.txt
 ```
 
----
-
-## 🔑 Environment Variables
-
-Create a `.env` file:
-
-```
+### 3. Create `.env`
+```env
 OPENAI_API_KEY=your_openai_key
 JAMENDO_CLIENT_ID=your_jamendo_client_id
 ```
 
 ---
 
-## ▶️ Run the App
-
+## ▶️ Run the app
 ```bash
-python -m streamlit run app.py
+streamlit run app.py
 ```
 
 ---
 
-## 🧪 Example Use Case
+## 🎯 Usage
+1. Upload one or more videos
+2. (Optional) Upload logo
+3. Click **Find best free music**
+4. Preview & select music
+5. Click **Generate Short**
+6. Download final video
 
-**Scenario:** Volunteers preparing sandwiches  
+---
 
-Input:
-- multiple raw clips (prep, assembly, packaging)
+## ⚠️ Large Files
+- Files over ~500MB may fail
+- Recommended:
+  - 720p–1080p
+  - under 300–500MB per file
 
-Output:
-- 30-second structured video:
-  - intro → process → result  
-  - captions  
-  - branding  
-  - music  
+### Compress video
+```bash
+ffmpeg -i input.mp4 -vf "scale=1280:-2" -c:v libx264 -crf 28 -preset fast -c:a aac -b:a 96k output.mp4
+```
 
 ---
 
 ## 🔮 Future Improvements
+- Auto caption generation (speech-to-text)
+- Face tracking for better vertical crops
+- AI highlight detection (beyond motion)
+- Beat-sync editing with music
+- Drag-and-drop timeline editor
+- Export presets (TikTok, Reels, Shorts)
+- Cloud rendering support
 
-- AI highlight detection  
-- Face / object recognition  
-- Auto storytelling engine  
-- Engagement optimization  
-- Full automation mode  
-- Multi-platform export presets  
+---
+
+## 💡 Tech Stack
+- Streamlit
+- MoviePy
+- FFmpeg
+- OpenAI API
+- Jamendo API
+- Pillow (PIL)
+- NumPy
+
+---
+
+## 📦 Output
+- MP4 (H.264)
+- AAC audio
+- Optimized for social media
 
 ---
 
 ## 👤 Author
-
-Alexander Berg  
-Budapest, Hungary  
-
-LinkedIn:  
-https://www.linkedin.com/in/alexander-berg-7ab863242/
+Alexander Berg
 
 ---
 
-## ⭐ Final Thought
-
-We don’t have a video editing problem.  
-We have a system design problem.
+## ⭐ If you like it
+Give it a star on GitHub and share 🚀

@@ -51,6 +51,7 @@ with st.sidebar:
     st.header("Advanced")
     motion_samples = st.slider("Motion samples per video", 10, 60, 30)
     selected_moments = st.slider("Selected moments per video", 3, 12, 6)
+    max_file_mb = st.slider("Large file warning threshold MB", 100, 2000, 500, step=100)
 
 
 uploaded_videos = st.file_uploader(
@@ -71,6 +72,32 @@ captions = st.text_area(
     "Önkéntesek készítenek szendvicseket.\nEgy kis segítség.\nValódi emberi hatás.",
     height=120,
 )
+
+
+if uploaded_videos:
+    too_large_files = []
+
+    for uploaded_video in uploaded_videos:
+        size_mb = uploaded_video.size / (1024 * 1024)
+
+        if size_mb > max_file_mb:
+            too_large_files.append((uploaded_video.name, size_mb))
+
+    if too_large_files:
+        st.warning("Some uploaded videos are very large and may fail or process very slowly.")
+
+        for file_name, size_mb in too_large_files:
+            st.write(f"⚠️ {file_name}: {size_mb:.0f} MB")
+
+        st.info(
+            "Recommended: compress large videos before upload. "
+            "Target each clip under 300–500 MB, 720p/1080p, 30 sec–3 min."
+        )
+
+        st.code(
+            'ffmpeg -i input.mp4 -vf "scale=1280:-2" -c:v libx264 -crf 28 -preset fast -c:a aac -b:a 96k compressed.mp4',
+            language="bash",
+        )
 
 
 def safe_font(size):
@@ -408,6 +435,19 @@ if uploaded_videos:
     st.success(f"{len(uploaded_videos)} video(s) uploaded.")
 
     if st.button("Generate Short"):
+        large_files = [
+            uploaded_video.name
+            for uploaded_video in uploaded_videos
+            if uploaded_video.size / (1024 * 1024) > max_file_mb
+        ]
+
+        if large_files:
+            st.error(
+                "Please compress the large files before generating. "
+                "This prevents Streamlit/MoviePy crashes."
+            )
+            st.stop()
+
         temp_dir = Path(tempfile.mkdtemp())
         output_path = temp_dir / "final_short_video.mp4"
 
