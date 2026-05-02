@@ -1,105 +1,410 @@
-# 🎬 AI Short Video Generator
+# \# 🎬 AI Short Video Generator
 
-Create high-quality short videos automatically from one or more input videos.
+# 
 
-## 🚀 Features
-- Multi-video upload & merging
-- Smart motion-based scene selection
-- Caption overlays (top + bottom)
-- Logo overlay
-- Credit screen
-- Vertical (9:16) mode
-- AI-powered music search (Jamendo)
-- Free music preview + selection
-- Automatic video normalization (FFmpeg)
-- Large file protection & warnings
+# A system for automatically transforming raw video footage into \*\*clean, cinematic short videos\*\* using motion-based editing, captions, and audio layering.
 
----
+# 
 
-## ⚙️ Setup
+# \---
 
-### 1. Clone repo
-```bash
-git clone https://github.com/YOUR_USERNAME/ai-short-video-generator.git
-cd ai-short-video-generator
-```
+# 
 
-### 2. Install dependencies
-```bash
-pip install -r requirements.txt
-```
+# \## 🚀 Overview
 
-### 3. Create `.env`
-```env
-OPENAI_API_KEY=your_openai_key
-JAMENDO_CLIENT_ID=your_jamendo_client_id
-```
+# 
 
----
+# Most video tools require manual editing.
 
-## ▶️ Run the app
-```bash
-streamlit run app.py
-```
+# 
 
----
+# This system approaches the problem differently:
 
-## 🎯 Usage
-1. Upload one or more videos
-2. (Optional) Upload logo
-3. Click **Find best free music**
-4. Preview & select music
-5. Click **Generate Short**
-6. Download final video
+# 
 
----
+# 👉 Detect where the action is
 
-## ⚠️ Large Files
-- Files over ~500MB may fail
-- Recommended:
-  - 720p–1080p
-  - under 300–500MB per file
+# 👉 Extract the most engaging moments
 
-### Compress video
-```bash
-ffmpeg -i input.mp4 -vf "scale=1280:-2" -c:v libx264 -crf 28 -preset fast -c:a aac -b:a 96k output.mp4
-```
+# 👉 Generate a short video automatically
 
----
+# 
 
-## 🔮 Future Improvements
-- Auto caption generation (speech-to-text)
-- Face tracking for better vertical crops
-- AI highlight detection (beyond motion)
-- Beat-sync editing with music
-- Drag-and-drop timeline editor
-- Export presets (TikTok, Reels, Shorts)
-- Cloud rendering support
+# \---
 
----
+# 
 
-## 💡 Tech Stack
-- Streamlit
-- MoviePy
-- FFmpeg
-- OpenAI API
-- Jamendo API
-- Pillow (PIL)
-- NumPy
+# \## 🧠 Core Idea
 
----
+# 
 
-## 📦 Output
-- MP4 (H.264)
-- AAC audio
-- Optimized for social media
+# Instead of:
 
----
+# → editing everything manually
 
-## 👤 Author
-Alexander Berg
+# 
 
----
+# We do:
 
-## ⭐ If you like it
-Give it a star on GitHub and share 🚀
+# → motion detection
+
+# → highlight ranking
+
+# → automated short creation
+
+# 
+
+# \---
+
+# 
+
+# \## ✨ Features
+
+# 
+
+# \* 🎯 Motion-based highlight detection
+
+# \* ✂️ Automatic short video generation
+
+# \* 🧾 Caption overlay system
+
+# \* 🎵 Background music integration
+
+# \* 🖼️ Logo \& credit support
+
+# \* 📱 Horizontal \& vertical modes
+
+# \* ⚡ Optimized for large raw footage
+
+# 
+
+# \---
+
+# 
+
+# \## 📁 Project Structure
+
+# 
+
+# ```id="x9y6pr"
+
+# ai-short-video-generator/
+
+# │
+
+# ├── app.py
+
+# ├── app\_fire\_horizontal\_preset.py
+
+# ├── README.md
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \## 🔥 App Versions
+
+# 
+
+# \### 1. `app.py`
+
+# 
+
+# General-purpose generator:
+
+# 
+
+# \* vertical \& horizontal support
+
+# \* flexible settings
+
+# \* full control
+
+# 
+
+# Run:
+
+# 
+
+# ```bash id="0x8n6c"
+
+# streamlit run app.py
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \### 2. `app\_fire\_horizontal\_preset.py`
+
+# 
+
+# Optimized for:
+
+# 
+
+# \* 🔥 fire performances
+
+# \* 🎬 cinematic horizontal videos
+
+# \* 📦 large raw footage
+
+# 
+
+# Preconfigured:
+
+# 
+
+# \* horizontal output
+
+# \* lower memory usage
+
+# \* compression-friendly
+
+# \* stable processing for long videos
+
+# 
+
+# Run:
+
+# 
+
+# ```bash id="j7ql4k"
+
+# streamlit run app\_fire\_horizontal\_preset.py
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \## 🔥 Use Case (Real Example)
+
+# 
+
+# Fire performance video:
+
+# 
+
+# Mandala of Fire × EUFlowria
+
+# 📍 Budapest – Rakpart 2026
+
+# 
+
+# 👉 Raw footage → cinematic short
+
+# 👉 Minimal manual editing
+
+# 👉 Social-ready output
+
+# 
+
+# \---
+
+# 
+
+# \## ⚙️ Tech Stack
+
+# 
+
+# \* Python
+
+# \* Streamlit
+
+# \* MoviePy
+
+# \* FFmpeg
+
+# \* NumPy
+
+# 
+
+# \---
+
+# 
+
+# \## 🧩 How It Works
+
+# 
+
+# 1\. Upload raw video(s)
+
+# 2\. System analyzes motion across frames
+
+# 3\. Selects most dynamic moments
+
+# 4\. Builds short clips
+
+# 5\. Adds captions + audio + credits
+
+# 6\. Exports final video
+
+# 
+
+# \---
+
+# 
+
+# \## 🛠️ Setup
+
+# 
+
+# ```bash id="7v3f2q"
+
+# git clone https://github.com/rasient/ai-short-video-generator.git
+
+# cd ai-short-video-generator
+
+# 
+
+# pip install -r requirements.txt
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \## 📁 Recommended Workflow
+
+# 
+
+# 1\. Compress large videos using FFmpeg
+
+# 2\. Upload clips (or full video if optimized)
+
+# 3\. Generate short
+
+# 4\. Export \& publish
+
+# 
+
+# \---
+
+# 
+
+# \## ⚠️ Notes on Large Videos
+
+# 
+
+# \* Raw files (1–2 GB) should be compressed
+
+# \* Recommended:
+
+# 
+
+# &#x20; \* 640p
+
+# &#x20; \* 24 fps
+
+# &#x20; \* CRF 34–36
+
+# 
+
+# Example:
+
+# 
+
+# ```bash id="qf5h2k"
+
+# ffmpeg -i input.mp4 -vf "scale=640:-2,fps=24" -c:v libx264 -crf 34 -preset slow -c:a aac -b:a 64k output.mp4
+
+# ```
+
+# 
+
+# \---
+
+# 
+
+# \## 🎯 Design Philosophy
+
+# 
+
+# This is not just a video tool.
+
+# 
+
+# It’s a \*\*system for extracting value from raw footage\*\*.
+
+# 
+
+# \---
+
+# 
+
+# \## 📈 Future Improvements
+
+# 
+
+# \* Auto compression pipeline
+
+# \* Direct export to social platforms
+
+# \* AI-generated captions
+
+# \* Multi-style output (cinematic / viral / minimal)
+
+# 
+
+# \---
+
+# 
+
+# \## 👤 Author
+
+# 
+
+# Alexander Berg
+
+# Systems-focused builder exploring AI + real-world applications
+
+# 
+
+# \---
+
+# 
+
+# \## 📌 Note
+
+# 
+
+# Videos are excluded from the repository due to size.
+
+# Use your own footage when testing.
+
+# 
+
+# \---
+
+# 
+
+# \## 💡 Closing Thought
+
+# 
+
+# We don’t have a content creation problem.
+
+# 
+
+# We have a \*\*content extraction problem\*\*.
+
+# 
+
+# This project is one step toward solving it.
+
+
+
