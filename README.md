@@ -95,8 +95,6 @@ https://github.com/rasient/systems-lab
 
 # 
 
-# ```id="x9y6pr"
-
 # ai-short-video-generator/
 
 # │
@@ -106,8 +104,6 @@ https://github.com/rasient/systems-lab
 # ├── app\_fire\_horizontal\_preset.py
 
 # ├── README.md
-
-# ```
 
 # 
 
@@ -139,11 +135,7 @@ https://github.com/rasient/systems-lab
 
 # 
 
-# ```bash id="0x8n6c"
-
 # streamlit run app.py
-
-# ```
 
 # 
 
@@ -185,11 +177,7 @@ https://github.com/rasient/systems-lab
 
 # 
 
-# ```bash id="j7ql4k"
-
 # streamlit run app\_fire\_horizontal\_preset.py
-
-# ```
 
 # 
 
@@ -269,8 +257,6 @@ https://github.com/rasient/systems-lab
 
 # 
 
-# ```bash id="7v3f2q"
-
 # git clone https://github.com/rasient/ai-short-video-generator.git
 
 # cd ai-short-video-generator
@@ -278,8 +264,6 @@ https://github.com/rasient/systems-lab
 # 
 
 # pip install -r requirements.txt
-
-# ```
 
 # 
 
@@ -327,11 +311,7 @@ https://github.com/rasient/systems-lab
 
 # 
 
-# ```bash id="qf5h2k"
-
 # ffmpeg -i input.mp4 -vf "scale=640:-2,fps=24" -c:v libx264 -crf 34 -preset slow -c:a aac -b:a 64k output.mp4
-
-# ```
 
 # 
 
